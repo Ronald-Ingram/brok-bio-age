@@ -281,17 +281,17 @@ export const HeyGenLiveAvatar = forwardRef<
     setStat("idle");
   }, [setStat, stopLocalSession]);
 
+  /** Lazy session: no LiveAvatar connect while idle — only on speak(). */
   useEffect(() => {
     if (!enabled) {
-      teardown();
+      void teardown();
       return;
     }
-    startSession();
+    setStat("idle");
     return () => {
       void teardown();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, sandboxMode, avatarId]);
+  }, [enabled, sandboxMode, avatarId, teardown, setStat]);
 
   const enableRoomAudio = useCallback(async () => {
     if (videoRef.current) {
@@ -346,39 +346,54 @@ export const HeyGenLiveAvatar = forwardRef<
 
   const speak = useCallback(
     async (text: string, fullLength = false) => {
-      await ensureSession();
-      const ws = wsRef.current;
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        throw new Error("heygen_ws_not_ready");
-      }
-
-      await enableRoomAudio();
-
-      const prepared = normalizeForSpeech(text);
-      const segments = fullLength
-        ? chunkTextForTts(prepared)
-        : [prepared];
-
-      for (let i = 0; i < segments.length; i++) {
-        onSpeakProgress?.(i + 1, segments.length);
-
-        const res = await fetch("/api/brok/heygen/speak", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: segments[i],
-            fullLength: false,
-          }),
-        });
-        const payload = await readSpeakResponse(res);
-        if (!res.ok) {
-          throw new Error(payload.hint ?? payload.error ?? "speak_failed");
+      if (!enabledRef.current) return;
+      try {
+        await ensureSession();
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          throw new Error("heygen_ws_not_ready");
         }
 
-        await streamPcmToAvatar(ws, payload.chunks ?? []);
+        await enableRoomAudio();
+
+        const prepared = normalizeForSpeech(text);
+        const segments = fullLength
+          ? chunkTextForTts(prepared)
+          : [prepared];
+
+        for (let i = 0; i < segments.length; i++) {
+          onSpeakProgress?.(i + 1, segments.length);
+
+          const res = await fetch("/api/brok/heygen/speak", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: segments[i],
+              fullLength: false,
+            }),
+          });
+          const payload = await readSpeakResponse(res);
+          if (!res.ok) {
+            throw new Error(payload.hint ?? payload.error ?? "speak_failed");
+          }
+
+          await streamPcmToAvatar(ws, payload.chunks ?? []);
+        }
+      } finally {
+        if (enabledRef.current) {
+          await stopLocalSession(true);
+          setStat("idle");
+        }
       }
     },
-    [enableRoomAudio, ensureSession, onSpeakProgress, streamPcmToAvatar]
+    [
+      enableRoomAudio,
+      ensureSession,
+      onSpeakProgress,
+      setStat,
+      stopLocalSession,
+      streamPcmToAvatar,
+    ]
   );
 
   useImperativeHandle(
@@ -414,6 +429,11 @@ export const HeyGenLiveAvatar = forwardRef<
           <Loader2 className="w-4 h-4 animate-spin text-neon-cyan" />
           Starting BROK live avatar…
         </div>
+      )}
+      {enabled && status === "idle" && (
+        <p className="absolute top-2 left-2 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-white/45 border border-white/10">
+          On speak · no idle stream
+        </p>
       )}
       {status === "live" && (
         <p className="absolute top-2 left-2 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-emerald-400/15 text-emerald-400 border border-emerald-400/25">

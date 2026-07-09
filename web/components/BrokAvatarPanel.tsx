@@ -87,7 +87,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [inneagramOpen, setInneagramOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [voiceOn, setVoiceOn] = useState(true);
-  const [avatarOn, setAvatarOn] = useState(true);
+  const [avatarOn, setAvatarOn] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [speakProgress, setSpeakProgress] = useState<string | null>(null);
   const [lastUserMessage, setLastUserMessage] = useState("");
@@ -378,7 +378,15 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 enabled={avatarOn}
                 avatarId={status?.heygenAvatarId}
                 sandboxMode={status?.heygenSandbox}
-                onError={(msg) => setError(msg)}
+                onError={(msg) => {
+                  if (msg.includes("liveavatar_403")) {
+                    setError(
+                      "LiveAvatar credits exhausted — add credits at app.liveavatar.com or keep Avatar off."
+                    );
+                  } else {
+                    setError(msg);
+                  }
+                }}
                 onStatus={(s) => setHeygenLive(s === "live")}
                 onSpeakProgress={(current, total) =>
                   setSpeakProgress(
@@ -440,9 +448,11 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         <p className="text-[11px] text-white/40 leading-relaxed">
           {useHeyGenLive && heygenLive
             ? status?.voiceReady
-              ? `${BROK_AVATAR_LABEL} live — lip-sync with ${status.voiceLabel ?? BROK_VOICE_CLONE_LABEL}. Toggle avatar off to save credits.`
-              : `${BROK_AVATAR_LABEL} live — enable BROK Voice for lip-sync. Say "full length please" to hear entire replies.`
-            : "Toggle voice or avatar off for text-only. Ask for full length to hear complete answers."}
+              ? `${BROK_AVATAR_LABEL} speaking — lip-sync with ${status.voiceLabel ?? BROK_VOICE_CLONE_LABEL}. Session ends after each reply.`
+              : `${BROK_AVATAR_LABEL} speaking — enable BROK Voice for lip-sync.`
+            : useHeyGenLive
+              ? `${BROK_AVATAR_LABEL} armed — connects only when BROK speaks (no idle streaming). Toggle off to use voice-only or text.`
+              : "Toggle voice or avatar off for text-only. Ask for full length to hear complete answers."}
         </p>
         {status && !status.voiceReady && (
           <p className="text-[11px] text-amber-300/80 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
