@@ -1,7 +1,6 @@
 /**
  * Ingram Enneagram (Inneagram) — distinct from Riso-Hudson.
- * Canonical sources: Ingram Enneagram Summary (7.22), Seven Secrets Book 2009 Manuscript.
- * NOT sourced from Genius Chapter 11 (non-canonical).
+ * Canonical sources: Ingram Enneagram Summary (7.22); Ingram canon from Genius by Ronald Ingram (Kiron Canon).
  */
 
 export type IngramTypeId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;

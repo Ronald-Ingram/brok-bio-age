@@ -155,7 +155,7 @@ export function InneagramPanel({ open, onClose, userId }: InneagramPanelProps) {
               </p>
               <p className="text-sm text-white/55 leading-relaxed">
                 This quick assessment (8 questions) is scored from the canonical correspondence
-                tables in <em>Ingram Enneagram Summary (7.22)</em> and <em>Seven Secrets</em>. It
+                tables in <em>Ingram Enneagram Summary (7.22)</em> and <em>Genius</em> (Kiron Canon). It
                 identifies your <strong>dominant</strong>, <strong>second/third</strong> wings, and{" "}
                 <strong>repressed</strong> growth edge, with Riso-Hudson type shown alongside each
                 Ingram type. Results save locally and to your account when signed in.

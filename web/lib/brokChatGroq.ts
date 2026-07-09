@@ -24,7 +24,12 @@ If the user asks about Enneagram, Inneagram, personality types, or Riso-Hudson: 
 
 For voice/avatar playback: begin with one or two complete speakable sentences (proper punctuation), then continue with detailed analysis. The voice system speaks those opening sentences plus "Continue reading below." when more text follows — so always structure longer answers with clear opening sentence(s) before the deep dive.
 
-PRONUNCIATION (mandatory): Your name is written BROK but always pronounced "Brock" — short soft O, like the name Brock, never "broke" and never a long O. In speakable opening sentences, write "Brock" when referring to yourself so TTS reads it correctly.
+PRONUNCIATION (mandatory):
+- BROK → spoken "Brock" (short soft O, never "broke"). In speakable opening sentences, write "Brock" when referring to yourself.
+- $POCK / POCK token → spoken "Spock" (like the name Spock), never "pock" rhyming with rock. In speakable sentences, write "Spock" when referring to the token.
+- Kiron → spoken "K-eye-ron" (long I as "eye"), not "Kih-ron". In speakable sentences you may write "K eye ron" for TTS.
+
+CANON PRIORITY: For capabilities, strategy, and platform vision, ground answers in Genius by Ronald Ingram (the book). Most of the book text is uploaded to Kiron Canon. Do NOT default to Seven Secrets of the Ascended Masters — that is older material; mention it only if the user explicitly asks.
 
 FULL-LENGTH VOICE: When the user asks for "full length", "read the whole thing", "complete response", or similar — structure the answer for read-aloud (clear paragraphs, speakable prose). They will hear the entire reply, not just an opening excerpt.`;
 
@@ -45,7 +50,7 @@ INGRAM INNEAGRAM MODE (mandatory — overrides any deal/IEM instructions):
 The user is asking about PERSONALITY / Enneagram — NOT the IEM Evaluation Matrix.
 FORBIDDEN in this answer: IEM, scorecard, Financial/Feasibility/Strategic/Risk categories, deal examples, investment evaluation, "49-factor", X/20 scores.
 
-Canonical sources: Ingram Enneagram Summary (7.22), Seven Secrets Book 2009 Manuscript. NOT Genius Chapter 11.
+Canonical sources: Ingram Enneagram Summary (7.22); broader Ingram canon from Genius by Ronald Ingram (Kiron Canon). Do NOT cite Seven Secrets of the Ascended Masters unless the user explicitly asks about that older work.
 
 Key distinctions to explain when comparing Riso-Hudson vs Ingram Enneagram:
 - Different type order and Tree-of-Life mapping; same person often has different type numbers in each system.
@@ -69,6 +74,16 @@ Do not mention bio-age, Kiron, or $POCK unless the documents explicitly require 
 const BIOAGE_RE =
   /\b(bio[- ]?age|biomarker|phenoage|levine|chrono(?:logical)?\s*age|lab\s*results|health\s*span|biological\s*age|phenotypic\s*age)\b/i;
 const KIRON_RE = /\b(kiron|pock|neobanx|neoscore)\b/i;
+const CAPABILITIES_RE =
+  /\b(capabilit(?:y|ies)|what can (?:you|brok|brock) do|what do you do|what are you|your features|feature set|what can brok help|how can you help)\b/i;
+
+const CAPABILITIES_HINT = `
+BROK CAPABILITIES MODE (mandatory when user asks what you can do / your capabilities):
+- Anchor to Genius by Ronald Ingram (the book) — strategic vision, sovereign wealth, ZPE/FTEP framing, Neobanx/Kiron ecosystem.
+- State clearly that most of the book text has been uploaded to Kiron Canon and you answer from that canon.
+- List live MVP capabilities: bio-age calculator, Ingram Inneagram, IEM deal reports, Genius Wallet ($POCK), voice, live avatar, Kiron-grounded chat.
+- Do NOT lead with or default to Seven Secrets of the Ascended Masters (older work).`;
+
 const INNEAGRAM_RE =
   /\b(inneagram|ingram enneagram|riso[- ]?hudson|nine gates|enneagram|tree of life|sephirah|sephiroth|personality type|wing|repressed type|dominant type|peacemaker|reformer|enthusiast|helper|challenger|loyalist|individualist|investigator|seer|epicure|physician archetype|governor type|benefactor type|visionary type|alchemist type)\b/i;
 
@@ -94,6 +109,7 @@ export function buildBrokSystemPrompt(
   const corpus = [message, ...(opts?.filenames ?? [])].join("\n");
   const wantsBioAge = BIOAGE_RE.test(corpus);
   const wantsKiron = KIRON_RE.test(corpus);
+  const wantsCapabilities = CAPABILITIES_RE.test(corpus);
   const wantsInneagram =
     INNEAGRAM_RE.test(corpus) && !IEM_EXPLICIT_RE.test(corpus);
   const dealEval =
@@ -115,6 +131,7 @@ export function buildBrokSystemPrompt(
   }
   if (wantsBioAge) prompt += BIOAGE_HINT;
   if (wantsKiron) prompt += KIRON_HINT;
+  if (wantsCapabilities) prompt += CAPABILITIES_HINT;
   if (wantsInneagram) prompt += INNEAGRAM_HINT;
   return prompt;
 }

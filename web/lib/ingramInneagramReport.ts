@@ -122,7 +122,7 @@ export function inneagramReportHtml(
     <p class="note">Strengthen your dominant and wing types as allies. Integrate the repressed type through self-remembering — do not attack it directly; assimilate its gifts. Reassess quarterly. Pair with IEM for high-stakes decisions.</p>
   </main>
   <footer class="footer">
-    Ingram Enneagram © Ronald Ingram · Canonical sources: Ingram Enneagram Summary (7.22), Seven Secrets Book 2009 Manuscript.
+    Ingram Enneagram © Ronald Ingram · Canonical sources: Ingram Enneagram Summary (7.22); Genius by Ronald Ingram (Kiron Canon).
     Riso-Hudson correspondence per Summary 7.22 table. For self-discovery — not clinical diagnosis.
   </footer>
 </div></body></html>`;

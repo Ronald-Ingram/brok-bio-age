@@ -65,11 +65,18 @@ function brokToBrock(text: string): string {
     .replace(/\bBrok('s)?\b/g, "Brock$1");
 }
 
+/** $POCK → "Spock"; Kiron → "K eye ron" (long I as "eye"). */
+function brandPronunciationForSpeech(text: string): string {
+  return text
+    .replace(/\$POCK/gi, "Spock")
+    .replace(/\bPOCK\b/gi, "Spock")
+    .replace(/\bKiron\b/gi, "K eye ron");
+}
+
 /** Expand currency/units for TTS so million/billion are never dropped. */
 export function normalizeForSpeech(text: string): string {
   let t = brokToBrock(text);
-
-  t = t.replace(/\$POCK/gi, "POCK token");
+  t = brandPronunciationForSpeech(t);
   t = t.replace(/\$(\d+(?:\.\d+)?)\s*([Tt]rillion)\b/g, "$1 $2 dollars");
   t = t.replace(/\$(\d+(?:\.\d+)?)\s*([Bb]illion)\b/g, "$1 $2 dollars");
   t = t.replace(/\$(\d+(?:\.\d+)?)\s*([Mm]illion)\b/g, "$1 $2 dollars");
