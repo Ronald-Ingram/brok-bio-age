@@ -1,0 +1,26 @@
+# Rate-limited reverse proxy for BROK Bio-Age API
+# Copy to your server and adjust domain + upstream.
+#
+# Requires Caddy 2.8+ with rate_limit module (caddy-ratelimit plugin)
+# or use the nginx example in DEPLOY.md.
+
+brok-bioage-api.example.com {
+    # 100 requests/minute per client IP on API routes
+    rate_limit {
+        zone api_calculate {
+            match path /api/v1/*
+            key {remote_host}
+            events 100
+            window 1m
+        }
+    }
+
+    # Health checks bypass rate limit (optional separate handle)
+    handle /health {
+        reverse_proxy api:8000
+    }
+
+    handle {
+        reverse_proxy api:8000
+    }
+}

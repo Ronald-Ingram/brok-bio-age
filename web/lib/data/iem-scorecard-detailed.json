@@ -1,0 +1,112 @@
+{
+  "framework": "IEM_Scorecard_Detailed_v1",
+  "version": "2026-05",
+  "description": "Full Ingram Evaluation Matrix (IEM) Scorecard model with 49 default sub-factors. Based on operational spreadsheet implementation. Categories have fixed weights. Sub-factors have default weights and can be adapted or extended by users or BROK agents.",
+  "total_factors": 49,
+  "scoring_scale": "1-5",
+  "ideal_score_per_factor": 5,
+  "normalization": "Category scores are normalized against ideal weighted total, then combined using category_weights.",
+  "category_weights": {
+    "Financial": 0.30,
+    "Feasibility": 0.20,
+    "Strategic": 0.30,
+    "Risk": 0.20
+  },
+  "scoring_principles": [
+    "Relativistic Scoring: Scores (1-5) are relative to benchmarks and context.",
+    "Confidence Weighting: Adjust scores based on data quality and certainty.",
+    "Contextual Anchoring: Weights and interpretation can shift based on project type (e.g. Visionary vs Regulatory vs Credit Decision)."
+  ],
+  "categories": {
+    "Financial": {
+      "weight": 0.30,
+      "factor_count": 9,
+      "description": "Quantifiable resource effects, revenue, costs, capital, and liquidity impacts.",
+      "factors": [
+        {"name": "Three Year EBITDA Impact", "default_weight": 4, "ideal_score": 5},
+        {"name": "Revenue Per Transaction (Average)", "default_weight": 4, "ideal_score": 5},
+        {"name": "Payout Timing (Time to Break even)", "default_weight": 4, "ideal_score": 5},
+        {"name": "Product Capital Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Capital Investment Required", "default_weight": 3, "ideal_score": 5},
+        {"name": "Same store revenue contribution / mo.", "default_weight": 3, "ideal_score": 5},
+        {"name": "Loan Loss Provision (rate)", "default_weight": 3, "ideal_score": 5},
+        {"name": "Market Size (est. population)", "default_weight": 3, "ideal_score": 5},
+        {"name": "Distribution (Centers and States)", "default_weight": 2, "ideal_score": 5}
+      ]
+    },
+    "Feasibility": {
+      "weight": 0.20,
+      "factor_count": 14,
+      "description": "Practical executability, resources, skills, timeline, and operational requirements.",
+      "factors": [
+        {"name": "Time to Implement", "default_weight": 4, "ideal_score": 5},
+        {"name": "IT Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Marketing Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Accounting Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Treasury Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Training Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Operational Impact / Requirements", "default_weight": 4, "ideal_score": 5},
+        {"name": "Legal Resource Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "External Resources Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Collections Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Real Estate Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "HR Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Product Development Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Availability of Required Personnel", "default_weight": 2, "ideal_score": 5},
+        {"name": "Availability of Required Capital", "default_weight": 4, "ideal_score": 5},
+        {"name": "Finance Requirements", "default_weight": 3, "ideal_score": 5},
+        {"name": "Loss Prevention Requirements", "default_weight": 3, "ideal_score": 5}
+      ]
+    },
+    "Strategic": {
+      "weight": 0.30,
+      "factor_count": 18,
+      "description": "Alignment with mission, vision, competitive positioning, market dynamics, and long-term identity.",
+      "factors": [
+        {"name": "Sustainability", "default_weight": 4, "ideal_score": 5},
+        {"name": "Alignment with current objectives", "default_weight": 4, "ideal_score": 5},
+        {"name": "Public image impact", "default_weight": 4, "ideal_score": 5},
+        {"name": "Market attractiveness", "default_weight": 4, "ideal_score": 5},
+        {"name": "Market share rating", "default_weight": 3, "ideal_score": 5},
+        {"name": "Closeness to core business", "default_weight": 4, "ideal_score": 5},
+        {"name": "Market segment strength", "default_weight": 3, "ideal_score": 5},
+        {"name": "Number of significant competitors", "default_weight": 3, "ideal_score": 5},
+        {"name": "Strength of competitors", "default_weight": 3, "ideal_score": 5},
+        {"name": "Staying power vs competitors", "default_weight": 4, "ideal_score": 5},
+        {"name": "Competitors freedom to abandon market", "default_weight": 4, "ideal_score": 5},
+        {"name": "Capability/Propensity of competitors to attack", "default_weight": 3, "ideal_score": 5},
+        {"name": "Expected speed of competitors response", "default_weight": 2, "ideal_score": 5},
+        {"name": "Expected cost of competitors to respond", "default_weight": 4, "ideal_score": 5},
+        {"name": "Negotiating power of suppliers", "default_weight": 2, "ideal_score": 5},
+        {"name": "Negotiating power of customers", "default_weight": 2, "ideal_score": 5},
+        {"name": "Barriers to entry", "default_weight": 3, "ideal_score": 5},
+        {"name": "Threat of substitutes", "default_weight": 2, "ideal_score": 5},
+        {"name": "Differentiation rating", "default_weight": 3, "ideal_score": 5}
+      ]
+    },
+    "Risk": {
+      "weight": 0.20,
+      "factor_count": 8,
+      "description": "Downsides including regulatory, reputational, operational, legal, and macroeconomic risks. Includes credit-specific factors.",
+      "factors": [
+        {"name": "Legal Opinion Letter", "default_weight": 4, "ideal_score": 5},
+        {"name": "Clearly Defined Legal Framework", "default_weight": 4, "ideal_score": 5},
+        {"name": "Compliance Impact", "default_weight": 4, "ideal_score": 5},
+        {"name": "Image / Public Response", "default_weight": 3, "ideal_score": 5},
+        {"name": "Uncertainty", "default_weight": 2, "ideal_score": 5},
+        {"name": "Cannibalization", "default_weight": 2, "ideal_score": 5},
+        {"name": "Geographic", "default_weight": 1, "ideal_score": 5},
+        {"name": "Macroeconomic", "default_weight": 1, "ideal_score": 5},
+        {"name": "Credit Risk", "default_weight": 3, "ideal_score": 5}
+      ]
+    }
+  },
+  "extensibility": {
+    "description": "Users or BROK agents can add, remove, or re-weight any sub-factor. New factors should include a name, default_weight (1-5), and ideal_score.",
+    "allowed_operations": ["add_factor", "modify_weight", "disable_factor", "add_custom_category"]
+  },
+  "integration_notes": {
+    "banking_use_case": "Map standard financial ratios (DSCR, LTV, DTI/TDSR, Debt Yield, etc.) into Financial and Risk categories. Credit Risk and Loan Loss Provision factors already exist natively.",
+    "brok_agent": "This model replaces the simple 4-bucket version for high-stakes decisions (loan origination, Star Bank approvals, investment decisions)."
+  }
+}

@@ -1,0 +1,23 @@
+# Render.com — one-click Bio-Age API deploy
+# Dashboard → New → Blueprint → connect repo → apply
+services:
+  - type: web
+    name: brok-bioage-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: ""
+    plan: starter
+    region: virginia
+    healthCheckPath: /health
+    envVars:
+      - key: BIOAGE_CORS_ORIGINS
+        value: https://bio-age.kiron.ai,https://web-phi-murex-97.vercel.app
+      - key: BIOAGE_ENABLE_LLM_PARSE
+        value: "false"
+    buildFilter:
+      paths:
+        - api/**
+        - brok_bioage/**
+        - Dockerfile
+        - fly.toml

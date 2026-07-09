@@ -1,0 +1,30 @@
+# Dev stack — hot reload with volume mounts
+# Usage: docker compose -f docker-compose.dev.yml up
+
+services:
+  api:
+    build:
+      context: .
+      target: api
+    ports:
+      - "8000:8000"
+    environment:
+      BIOAGE_CORS_ORIGINS: "http://localhost:3000"
+    volumes:
+      - ./api:/app/api:ro
+      - ./brok_bioage:/app/brok_bioage:ro
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    user: root
+
+  web:
+    image: node:20-alpine
+    working_dir: /web
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:8000"
+    volumes:
+      - ./web:/web
+    depends_on:
+      - api

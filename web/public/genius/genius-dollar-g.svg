@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" role="img" aria-label="$G Genius Token">
+  <defs>
+    <linearGradient id="metal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f8fbff"/>
+      <stop offset="35%" stop-color="#c7d2dc"/>
+      <stop offset="55%" stop-color="#eef3f8"/>
+      <stop offset="100%" stop-color="#8fa0b2"/>
+    </linearGradient>
+    <linearGradient id="metalDark" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#7b8ea3" stop-opacity="0.9"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="320" height="240" fill="transparent"/>
+  <g filter="url(#glow)">
+    <!-- Dollar sign -->
+    <text x="18" y="168" font-family="ui-sans-serif, system-ui, sans-serif" font-size="132" font-weight="700" fill="url(#metal)">$</text>
+    <path d="M52 58 H78 M52 182 H78" stroke="#eef4fa" stroke-width="4" stroke-linecap="round" opacity="0.8"/>
+    <circle cx="66" cy="72" r="3" fill="#f4f8fc"/>
+    <circle cx="66" cy="168" r="3" fill="#f4f8fc"/>
+    <path d="M58 96 C58 84 70 78 82 78 C96 78 104 88 104 100 C104 114 90 118 78 124 C66 130 58 138 58 152 C58 168 72 178 88 178 C102 178 112 170 118 160"
+      fill="none" stroke="#d8e4ef" stroke-width="2.5" opacity="0.55"/>
+    <!-- Circuit G (stylized, matches book cover weight) -->
+    <path d="M118 52 C170 52 206 78 206 120 C206 162 170 188 132 188 C108 188 92 176 88 160"
+      fill="none" stroke="url(#metal)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M206 120 H168 C148 120 132 136 132 156 C132 168 140 176 154 176"
+      fill="none" stroke="url(#metal)" stroke-width="22" stroke-linecap="round"/>
+    <path d="M132 120 H206" fill="none" stroke="url(#metalDark)" stroke-width="18" stroke-linecap="round"/>
+    <!-- Circuit traces -->
+    <path d="M128 72 H188 M140 92 H176 M150 148 H198 M118 188 V208 M138 188 V204 M158 188 V210 M178 188 V202"
+      stroke="#eef3f8" stroke-width="2.2" stroke-linecap="round" opacity="0.85"/>
+    <circle cx="188" cy="72" r="3.5" fill="#f7fbff"/>
+    <circle cx="176" cy="92" r="3" fill="#f7fbff"/>
+    <circle cx="198" cy="148" r="3" fill="#f7fbff"/>
+    <circle cx="118" cy="208" r="3" fill="#f7fbff"/>
+    <circle cx="158" cy="210" r="3" fill="#f7fbff"/>
+    <path d="M198 88 L214 72 M198 96 L220 96" stroke="#d5e2ee" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+  </g>
+</svg>

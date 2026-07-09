@@ -1,0 +1,137 @@
+Patient: PATIENT, TEST
+
+Age: 45 y
+PHN: 9043954725 Gender: Female
+Date of Birth: 01/May/1980 Unit: CG00132167
+Patient Phone: (604)799-3741
+Ordering Provider:Scholtz, Mervin
+CopyTo(s): #Edwards Crossing Medical Clin; Scholtz, Mervin
+Lab #: 26-49525685
+Collected: 08/Apr/2026 12:50
+Received: 08/Apr/2026 13:16
+Test Result Result
+Flags
+Reference
+Range Result Units Time Resulted
+Hematology Profile, Differential and Blood Film Review
+CBC & Differential
+WBC 4.0-11.0 10*9/L 08/Apr/2026 13:558.3
+RBC 3.50-5.00 10*12/L 08/Apr/2026 13:554.68
+Hemoglobin 115-160 g/L 08/Apr/2026 13:55143
+Hematocrit 0.35-0.47 L/L 08/Apr/2026 13:550.42
+MCV 80-100 fL 08/Apr/2026 13:5590
+RDW <14.5 % 08/Apr/2026 13:5512.7
+Platelets 150-400 10*9/L 08/Apr/2026 13:55301
+Neutrophils 2.0-8.0 10*9/L 08/Apr/2026 13:555.8
+Lymphocytes 1.0-4.0 10*9/L 08/Apr/2026 13:551.9
+Monocytes 0.1-0.8 10*9/L 08/Apr/2026 13:550.4
+Eosinophils <0.6 10*9/L 08/Apr/2026 13:550.1
+Basophils <0.2 10*9/L 08/Apr/2026 13:550.1
+Granulocytes Immature 0.0-0.1 10*9/L 08/Apr/2026 13:550.1
+Glucose and Hemoglobin A1C
+Hemoglobin A1C/Total Hemoglobin 4.2-6.0 % 08/Apr/2026 22:014.9
+The HbA1c test is traceable to the reference method of
+National Glycohemoglobin Standardization Program (NGSP).
+Routine Chemistry
+Sodium & Potassium Panel
+Sodium 135-145 mmol/L 08/Apr/2026 14:24137
+Potassium L 3.5-5.0 mmol/L 08/Apr/2026 14:243.3
+Creatinine & Glomerular Filtration Rate Predicted Panel
+Creatinine 45-90 umol/L 08/Apr/2026 14:2461
+Glomerular Filtration Rate/1.73 Sq M Predicted
+>60 mL/min 08/Apr/2026 14:24105
+Calcium 2.10-2.60 mmol/L 08/Apr/2026 14:242.34
+Magnesium 0.70-1.20 mmol/L 08/Apr/2026 14:240.81
+In management of Eclampsia, the reference range is not
+transferable as a therapeutic range.
+C Reactive Protein; High Sensitivity
+<7.5 mg/L 08/Apr/2026 14:243.2
+Alanine Aminotransferase <36 U/L 08/Apr/2026 14:2419
+Alkaline Phosphatase 35-105 U/L 08/Apr/2026 14:2438
+Gamma Glutamyl Transferase <31 U/L 08/Apr/2026 14:2419
+Creatine Kinase <140 U/L 08/Apr/2026 14:2457
+Lipids
+Lipid Panel
+Cholesterol H 2.00-5.20 mmol/L 08/Apr/2026 14:245.86
+Cholesterol In LDL 1.5-3.4 mmol/L 08/Apr/2026 14:243.3
+The optimal LDL cholesterol for intermediate and high risk
+individuals is less than 2.1 mmol/L. If triglycerides are
+greater than 1.4 mmol/L, consider monitoring of alternate
+lipid targets nonHDL cholesterol or apoB. For low risk
+individuals with LDL cholesterol greater than 4.9 mmol/L,
+target a reduction of LDL cholesterol of at least 50
+percent. See Can J Cardiol 2013 vol 29 pgs 151 to 167.
+Cholesterol In HDL >1.19 mmol/L 08/Apr/2026 14:241.97
+Inquiries: Chilliwack General Hospital 604-795-4108
+This printed PLIS report contains confidential personal information and is for direct care purposes only.
+                                              FINAL
+Printed by: Health Gateway Printed On: 11/Apr/2026 11:59
+RCV: 4.0 Continued on Page - 2 Page 1
+Patient: PATIENT, TEST
+
+Age: 45 y
+PHN: 9043954725 Gender: Female
+Date of Birth: 01/May/1980 Unit: CG00132167
+Lab #: 26-49525685
+Collected: 08/Apr/2026 12:50
+Received: 08/Apr/2026 13:16
+Test Result Result
+Flags
+Reference
+Range Result Units Time Resulted
+Lipids (continued)
+Lipid Panel (continued)
+Cholesterol Non HDL <4.3 mmol/L 08/Apr/2026 14:243.9
+Non HDL-cholesterol is calculated from total cholesterol and
+HDL-C and is not affected by the fasting status of the
+patient. The optimal non HDL-cholesterol level for
+intermediate and high risk individuals is less than 2.7
+mmol/L. See Can J Cardiol 2013 vol 29 pgs 151 to 167.
+Triglyceride <2.30 mmol/L 08/Apr/2026 14:241.36
+Hours After Meal h 08/Apr/2026 13:221
+Thyroid Function
+Thyroid Stimulating Hormone (TSH) 0.30-5.50 mU/L 08/Apr/2026 19:592.20
+During Pregnancy:
+T1: 0.10 - 3.50 mU/L
+T2: 0.30 - 3.50 mU/L
+T3: 0.45 - 4.00 mU/L
+Reference intervals are based on treatment thresholds
+included in the 2017 American Thyroid Association Guidelines
+Autoantibodies
+Nuclear Ab <0.7 10/Apr/2026 14:160.1
+Antinuclear antibodies, including antibodies to dsDNA or to
+extractable nuclear antigens (SS-A, SS-B, Sm, U1RNP, Scl-70,
+Jo-1, and Centromere), are not present.
+Further testing is not indicated; however, if required,
+please contact a Hematopathologist.
+Rheumatoid Factor <15 [IU]/mL 08/Apr/2026 20:31< 10
+Chemical Hematology
+Iron & Iron Binding Capacity Panel
+Iron 9.0-30.0 umol/L 08/Apr/2026 19:4318.6
+Iron Binding Capacity H 45-70 umol/L 08/Apr/2026 19:4388
+Iron Saturation 0.15-0.55 08/Apr/2026 19:430.21
+Ferritin 15-200 ug/L 08/Apr/2026 20:1045
+Iron deficiency unlikely. Interpretation assumes no active
+inflammatory process.
+Vitamin B12 133-675 pmol/L 08/Apr/2026 20:10203
+Normal:         133-675 pmol/L
+Indeterminate:  107-132 pmol/L
+Deficient:      <107 pmol/L
+Clinically significant B12 deficiency may occur even with
+levels in the normal range, particularly in elderly
+patients.
+Gonadal Function/Sexual Development
+Follicle Stimulating Hormone (FSH)
+[IU]/L 08/Apr/2026 22:560.7
+Female greater than 12 years
+Follicular phase:        3.8 - 8.8 IU/L
+Mid Cycle:               4.5 - 22.5 IU/L
+Luteal:                  1.8 - 5.1 IU/L
+Post-Menopausal:         16.7 - 113.6 IU/L
+Prolactin ug/L 08/Apr/2026 22:309.3
+Pre-menopausal: 3.3 - 26.7 ug/L
+Post-menopausal: 2.7 - 19.6 ug/L
+This printed PLIS report contains confidential personal information and is for direct care purposes only.
+                                              FINAL
+Printed by: Health Gateway Printed On: 11/Apr/2026 11:59
+RCV: 4.0     End of Report Page 2

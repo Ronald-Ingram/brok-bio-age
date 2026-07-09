@@ -1,0 +1,14 @@
+LabCorp Results
+
+Test Name                    Result    Units       Reference
+Albumin                      4.6       g/dL        3.5-5.5
+Creatinine                   0.81      mg/dL       0.60-1.26
+Glucose                      91        mg/dL       65-99
+CRP                          1.78      mg/L        <3.0
+Lymphs                       27        %           
+MCV                          96        fL          80-100
+RDW                          13.0      %           11.0-15.0
+Alkaline Phosphatase         141       U/L         44-121
+WBC                          6.2       x10E3/uL    3.4-10.8
+HbA1c                        5.1       %           4.0-5.6
+Testosterone                 1500      ng/dL

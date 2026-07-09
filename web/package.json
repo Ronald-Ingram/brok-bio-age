@@ -1,0 +1,50 @@
+{
+  "name": "brok-bioage-web",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:clean": "rm -rf .next && next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "dns:brok": "node scripts/cloudflare-brok-dns.mjs",
+    "dns:brok:ui": "node scripts/cloudflare-dns-playwright.mjs",
+    "dns:cloudflare": "node scripts/cloudflare-dns-playwright.mjs",
+    "dns:cloudflare-api": "python3 scripts/cloudflare-add-brok-api.py",
+    "dns:vercel-seed": "node scripts/vercel-neobanx-dns.mjs",
+    "dns:godaddy-ns": "node scripts/godaddy-vercel-ns-playwright.mjs",
+    "test:smoke": "node scripts/smoke-test.mjs",
+    "test:smoke:browser": "node scripts/smoke-test-playwright.mjs",
+    "twilio:setup": "node scripts/setup-twilio-vercel.mjs",
+    "twilio:console": "node scripts/twilio-console-playwright.mjs"
+  },
+  "dependencies": {
+    "@solana/spl-token": "^0.4.14",
+    "@solana/web3.js": "^1.98.4",
+    "@supabase/supabase-js": "^2.108.2",
+    "bs58": "^6.0.0",
+    "framer-motion": "^11.3.0",
+    "livekit-client": "^2.20.0",
+    "lucide-react": "^0.400.0",
+    "mammoth": "^1.12.0",
+    "next": "^15.3.6",
+    "pg": "^8.22.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "recharts": "^2.15.0",
+    "stripe": "^17.7.0",
+    "unpdf": "^1.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8.20.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "autoprefixer": "^10.4.19",
+    "playwright": "^1.49.1",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5"
+  }
+}

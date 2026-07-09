@@ -1,0 +1,24 @@
+# Proxy kiron.ai/buy-pock → BROK Bio-Age checkout (Caddy example)
+#
+# Deploy the Bio-Age web app to Vercel (or your host), then point
+# kiron.ai/buy-pock at the same /buy-pock route.
+#
+# Option A — full app on bio-age subdomain, path proxy on kiron.ai:
+#
+# bio-age.kiron.ai {
+#     reverse_proxy https://your-app.vercel.app
+# }
+#
+# kiron.ai {
+#     handle_path /buy-pock* {
+#         reverse_proxy https://your-app.vercel.app
+#     }
+#     # ... rest of Kiron site
+# }
+#
+# Option B — set env on Vercel:
+#   NEXT_PUBLIC_POCK_STRIPE_URL=https://kiron.ai/buy-pock
+#   NEXT_PUBLIC_SITE_URL=https://kiron.ai
+#
+# Stripe webhook endpoint (Vercel):
+#   POST https://your-app.vercel.app/api/stripe/webhook

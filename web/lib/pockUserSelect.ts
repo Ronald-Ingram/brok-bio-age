@@ -1,0 +1,3 @@
+/** Columns safe to expose to the browser (excludes password hash). */
+export const BROK_USER_SELECT =
+  "id, display_name, pock_balance, trial_credited, subscription_active, subscription_recurring, subscription_tier, pock_og_wallet, pock_og_verified_at, pock_og_source, subscription_started_at, subscription_renews_at, included_pock_remaining, included_pock_allowance, calc_count, custody_status, solana_wallet_address, solana_wallet_connected_at, on_chain_pock_balance, created_at, updated_at";

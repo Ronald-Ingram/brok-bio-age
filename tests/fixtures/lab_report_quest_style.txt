@@ -1,0 +1,27 @@
+COMPREHENSIVE METABOLIC PANEL / CBC
+Patient: REDACTED TEST
+Collection Date: 06/30/2026
+
+GLUCOSE                    95          mg/dL
+BUN                        18          mg/dL
+CREATININE                 0.93        mg/dL
+eGFR                       98          mL/min/1.73m2
+BUN/CREATININE RATIO       19
+
+ALBUMIN                    4.4         g/dL
+ALKALINE PHOSPHATASE      160         U/L
+
+CBC WITH DIFFERENTIAL
+WBC                        5.5         x10E3/uL
+RBC                        4.82        x10E6/uL
+HEMOGLOBIN                 14.8        g/dL
+HEMATOCRIT                 44.2        %
+MCV                        94          fL
+RDW                        12.8        %
+
+LYMPHOCYTES                28          %
+NEUTROPHILS                58          %
+
+C-REACTIVE PROTEIN, CARDIO   1.55      mg/L
+
+TESTOSTERONE, TOTAL        1239        ng/dL

@@ -1,0 +1,840 @@
+"use client";
+
+import { CustodyStatusPanel } from "@/components/CustodyStatusPanel";
+import { GeniusSubWalletsPanel } from "@/components/GeniusSubWalletsPanel";
+import { NeoWalletProductsPanel } from "@/components/NeoWalletProductsPanel";
+import { NeoWalletServicesPanel } from "@/components/NeoWalletServicesPanel";
+import { PockAssetDisclaimer } from "@/components/PockAssetDisclaimer";
+import { PockOgClaimPanel } from "@/components/PockOgClaimPanel";
+import { PockPriceTicker } from "@/components/PockPriceTicker";
+import {
+  GENIUS_WALLET_SUBTITLE,
+  GENIUS_WALLET_TITLE,
+} from "@/lib/geniusWalletCopy";
+import {
+  NEO_WALLET_SUBTITLE,
+  NEO_WALLET_TITLE,
+} from "@/lib/neoWalletCatalog";
+import { usePock } from "@/context/PockContext";
+import { AccountIdentity } from "@/components/AccountIdentity";
+import { AccountRestorePanel } from "@/components/AccountRestorePanel";
+import { TransactionHistorySection } from "@/components/TransactionHistorySection";
+import {
+  FREE_TIER_BENEFITS,
+  PREMIUM_PRIZE_POOL_POCK,
+  tierDisplayName,
+} from "@/lib/subscriptionConfig";
+import { FREE_TIER_COPY } from "@/lib/freeReport";
+import type { PockInviteResult } from "@/lib/pockService";
+import { totalSpendablePock } from "@/lib/pockService";
+import {
+  formatUsd,
+  pockToUsd,
+  usdToPock,
+} from "@/lib/purchaseConfig";
+import { IMPACT_OPTIONS, PREMIUM_FEATURES } from "@/lib/pockTypes";
+import { DigitalAssetDisclaimer } from "@/components/DigitalAssetDisclaimer";
+import { motion } from "framer-motion";
+import {
+  Coins,
+  Gift,
+  Heart,
+  Loader2,
+  Send,
+  Sparkles,
+  Wallet,
+} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+type ActionPanel = "premium" | "send" | "withdraw" | "gift" | "impact" | null;
+
+export interface WalletPanelProps {
+  /** genius = Genius Wallet branding; neo = legacy BROK Neo-Wallet label */
+  variant?: "genius" | "neo";
+  /** Hide title block when the parent page supplies its own hero */
+  hideHeader?: boolean;
+}
+
+export function WalletPanel({
+  variant = "neo",
+  hideHeader = false,
+}: WalletPanelProps) {
+  const isGenius = variant === "genius";
+  const walletTitle = isGenius ? GENIUS_WALLET_TITLE : NEO_WALLET_TITLE;
+  const walletSubtitle = isGenius ? GENIUS_WALLET_SUBTITLE : NEO_WALLET_SUBTITLE;
+  const balanceLabel = isGenius ? "Genius Wallet balance" : "Neo-Wallet balance";
+  const {
+    user,
+    ready,
+    loading,
+    configured,
+    createAccount,
+    spendPremium,
+    sendPockInvite,
+    sendGiftInvite,
+    withdraw,
+    donate,
+  } = usePock();
+
+  const [panel, setPanel] = useState<ActionPanel>(null);
+  const [recipient, setRecipient] = useState("");
+  const [phone, setPhone] = useState("");
+  const [recipientWallet, setRecipientWallet] = useState("");
+  const [address, setAddress] = useState("");
+  const [amount, setAmount] = useState("10");
+  const [usdAmount, setUsdAmount] = useState("2.00");
+  const [giftName, setGiftName] = useState("");
+  const [giftPhone, setGiftPhone] = useState("");
+  const [giftRecipientId, setGiftRecipientId] = useState("");
+  const [inviteResult, setInviteResult] = useState<PockInviteResult | null>(
+    null
+  );
+  const [impactId, setImpactId] = useState<string>(IMPACT_OPTIONS[0].id);
+  const [confirming, setConfirming] = useState(false);
+  const [pendingClaimUrl, setPendingClaimUrl] = useState<string | null>(null);
+  const [creatingAccount, setCreatingAccount] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const claimToken = params.get("claim");
+    if (claimToken) {
+      setPendingClaimUrl(`/claim?token=${encodeURIComponent(claimToken)}`);
+    }
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24 text-white/40">
+        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+        Loading wallet…
+      </div>
+    );
+  }
+
+  if (!ready || !user) {
+    return (
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl border border-neon-cyan/20 bg-bg-card p-10 text-center space-y-6"
+      >
+        <Wallet className="w-12 h-12 text-neon-cyan mx-auto opacity-80" />
+        <div>
+          <h2 className="text-xl font-semibold">{walletTitle}</h2>
+          <p className="text-sm text-white/50 mt-2 max-w-md mx-auto">
+            Create a free BROK account and get 100 $POCK to try calculations,
+            premium features, and more — no wallet setup required.
+          </p>
+        </div>
+        {!configured && (
+          <p className="text-sm text-amber-400/90 border border-amber-400/20 rounded-lg px-4 py-3 bg-amber-400/5">
+            Wallet backend not configured on this deployment — contact support.
+          </p>
+        )}
+        {createError && (
+          <p className="text-sm text-red-400/90 border border-red-400/20 rounded-lg px-4 py-3 bg-red-400/5">
+            {createError}
+          </p>
+        )}
+        <button
+          type="button"
+          disabled={creatingAccount || !configured}
+          onClick={async () => {
+            setCreateError(null);
+            setCreatingAccount(true);
+            try {
+              await createAccount();
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : "Could not create account";
+              setCreateError(
+                msg.includes("corp_float_insufficient")
+                  ? "Trial pool is refilling — wait a moment and try again."
+                  : msg.includes("sign_in_failed") || msg.includes("Protected deployment")
+                    ? "Sign-in blocked on this URL — use https://brok.neobanx.com/genius-wallet"
+                    : msg
+              );
+            } finally {
+              setCreatingAccount(false);
+            }
+          }}
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan font-medium text-sm hover:bg-neon-cyan/25 disabled:opacity-50 transition-colors"
+        >
+          {creatingAccount ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Sparkles className="w-4 h-4" />
+          )}
+          {creatingAccount ? "Creating account…" : "Create Free Account · 100 $POCK"}
+        </button>
+      </motion.section>
+    );
+  }
+
+  const resetForm = () => {
+    setPanel(null);
+    setConfirming(false);
+    setRecipient("");
+    setPhone("");
+    setRecipientWallet("");
+    setAddress("");
+    setAmount("10");
+    setUsdAmount("2.00");
+    setGiftName("");
+    setGiftPhone("");
+    setGiftRecipientId("");
+    setInviteResult(null);
+  };
+
+  const spendable = totalSpendablePock(user);
+
+  const syncUsdFromPock = (pockStr: string) => {
+    setAmount(pockStr);
+    const n = parseInt(pockStr, 10);
+    if (Number.isFinite(n) && n > 0) {
+      setUsdAmount(pockToUsd(n).toFixed(2));
+    }
+  };
+
+  const syncPockFromUsd = (usdStr: string) => {
+    setUsdAmount(usdStr);
+    const n = parseFloat(usdStr);
+    if (Number.isFinite(n) && n > 0) {
+      setAmount(String(usdToPock(n)));
+    }
+  };
+
+  const handleConfirm = async () => {
+    setConfirming(true);
+    const n = parseInt(amount, 10);
+    try {
+      if (panel === "send") {
+        const result = await sendPockInvite({
+          amount: n,
+          phone: phone.trim(),
+          recipientBrokId: recipient.trim() || undefined,
+          recipientWallet: recipientWallet.trim() || undefined,
+        });
+        setInviteResult(result);
+        setConfirming(false);
+        return;
+      } else if (panel === "gift") {
+        const result = await sendGiftInvite({
+          amount: n,
+          usdEquivalent: parseFloat(usdAmount) || pockToUsd(n),
+          recipientName: giftName.trim(),
+          phone: giftPhone.trim(),
+          recipientBrokId: giftRecipientId.trim() || undefined,
+        });
+        setInviteResult(result);
+        setConfirming(false);
+        return;
+      } else if (panel === "withdraw") withdraw(address.trim(), n);
+      else if (panel === "impact") {
+        const cause =
+          IMPACT_OPTIONS.find((o) => o.id === impactId)?.name ?? "Impact";
+        donate(cause, n);
+      }
+      resetForm();
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {!hideHeader && (
+        <header className="space-y-1">
+          <h2 className="text-2xl font-semibold tracking-tight text-white/90">
+            {walletTitle}
+          </h2>
+          <p className="text-sm text-white/45">{walletSubtitle}</p>
+        </header>
+      )}
+
+      {pendingClaimUrl && (
+        <section className="rounded-xl border border-neon-cyan/25 bg-neon-cyan/8 px-4 py-3 text-sm text-white/75 space-y-1">
+          <p className="font-medium text-neon-cyan/90">Finish claiming your gift</p>
+          <p>
+            Create your free account below if needed, copy your BROK user ID from
+            this wallet, then return to the claim page.
+          </p>
+          <Link href={pendingClaimUrl} className="text-neon-cyan hover:underline text-xs">
+            Return to claim page →
+          </Link>
+        </section>
+      )}
+
+      {/* Balance hero */}
+      <motion.section
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl border border-neon-cyan/25 bg-gradient-to-br from-neon-cyan/8 via-bg-card to-bg-card p-6 sm:p-8"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-white/40 mb-2">
+              {balanceLabel}
+            </p>
+            <p className="text-5xl font-semibold tabular-nums text-neon-cyan">
+              {user.pock_balance}
+              <span className="text-2xl text-white/40 ml-2">$POCK</span>
+            </p>
+            {(user.subscription_active || user.subscription_tier === "pock_og") && (
+              <p className="text-sm text-emerald-400/90 mt-2 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4" />
+                {tierDisplayName(user.subscription_tier)} ·{" "}
+                {user.included_pock_remaining}/{user.included_pock_allowance}{" "}
+                included $POCK/mo
+              </p>
+            )}
+          </div>
+          <div className="text-right text-sm text-white/40 space-y-1">
+            <AccountIdentity variant="card" />
+            <p>{user.calc_count} calculations run</p>
+            {user.subscription_renews_at && (
+              <p>
+                Renews{" "}
+                {new Date(user.subscription_renews_at).toLocaleDateString()}
+              </p>
+            )}
+          </div>
+        </div>
+      </motion.section>
+
+      {user.pock_balance <= 100 && user.trial_credited && (
+        <AccountRestorePanel />
+      )}
+
+      <NeoWalletProductsPanel featured={isGenius} />
+
+      <PockPriceTicker user={user} />
+
+      {isGenius && <CustodyStatusPanel />}
+
+      {isGenius && <GeniusSubWalletsPanel />}
+
+      <NeoWalletServicesPanel user={user} />
+
+      <PockOgClaimPanel />
+
+      {!user.subscription_active && user.subscription_tier !== "pock_og" && (
+        <section className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-xs text-white/55 space-y-1">
+          <p className="font-medium text-white/75">Free tier</p>
+          <p>{FREE_TIER_COPY.label}</p>
+          <p>
+            Additional reports: {FREE_TIER_BENEFITS.historyPreviewEntries}{" "}
+            preview entries in trends · subscribe to save full history.
+          </p>
+        </section>
+      )}
+
+      {user.subscription_tier === "premium" && (
+        <section className="rounded-xl border border-neon-cyan/20 bg-neon-cyan/5 px-4 py-3 text-xs text-white/60 space-y-1">
+          <p className="font-medium text-neon-cyan/90">Pro prize eligibility</p>
+          <p>
+            {PREMIUM_PRIZE_POOL_POCK.toLocaleString()} $POCK pool for largest
+            verified chrono − BROK bio-age delta. Winners may need notarized or
+            third-party lab validation; names and rankings may be published
+            promotionally.
+          </p>
+        </section>
+      )}
+
+      {/* Action buttons */}
+      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {(
+          [
+            {
+              id: "premium" as const,
+              label: "Premium Features",
+              icon: Sparkles,
+              color: "neon-cyan",
+            },
+            {
+              id: "send" as const,
+              label: "Send to User",
+              icon: Send,
+              color: "white",
+            },
+            {
+              id: "withdraw" as const,
+              label: "Withdraw",
+              icon: Wallet,
+              color: "white",
+            },
+            {
+              id: "gift" as const,
+              label: "Gift Credits",
+              icon: Gift,
+              color: "white",
+            },
+            {
+              id: "impact" as const,
+              label: "Impact",
+              icon: Heart,
+              color: "white",
+              stub: true,
+            },
+          ] as const
+        ).map((action) => (
+          <button
+            key={action.id}
+            type="button"
+            onClick={() => {
+              setPanel(panel === action.id ? null : action.id);
+              setConfirming(false);
+            }}
+            className={`relative rounded-xl border p-4 text-left transition-colors ${
+              panel === action.id
+                ? "border-neon-cyan/50 bg-neon-cyan/10"
+                : "border-white/10 bg-bg-card hover:border-white/20"
+            }`}
+          >
+            {"stub" in action && action.stub && (
+              <span className="absolute top-2 right-2 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-white/10 text-white/40">
+                Soon
+              </span>
+            )}
+            <action.icon
+              className={`w-5 h-5 mb-2 ${
+                action.color === "neon-cyan" ? "text-neon-cyan" : "text-white/60"
+              }`}
+            />
+            <p className="text-xs font-medium text-white/80">{action.label}</p>
+          </button>
+        ))}
+      </section>
+
+      {/* Expanded action panel */}
+      {panel === "premium" && (
+        <motion.section
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="rounded-2xl border border-white/10 bg-bg-card p-6 space-y-4"
+        >
+          <h3 className="text-sm font-medium text-white/70 flex items-center gap-2">
+            <Coins className="w-4 h-4 text-neon-cyan" />
+            Spend on Premium Features
+          </h3>
+          <div className="grid gap-3">
+            {PREMIUM_FEATURES.map((f) => {
+              const afford = user.pock_balance >= f.cost;
+              return (
+                <div
+                  key={f.id}
+                  className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-white/8 bg-black/20 px-4 py-3"
+                >
+                  <span className="text-2xl">{f.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white/85">{f.name}</p>
+                    <p className="text-xs text-white/45">{f.description}</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!afford}
+                    onClick={() => spendPremium(f.name, f.cost)}
+                    className="shrink-0 px-4 py-2 rounded-lg text-xs font-medium border border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/15 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {f.cost} $POCK
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </motion.section>
+      )}
+
+      {panel && panel !== "premium" && (
+        <motion.section
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-white/10 bg-bg-card p-6 space-y-4"
+        >
+          {panel === "send" && (
+            <>
+              <h3 className="text-sm font-medium text-white/70">
+                Send to User
+              </h3>
+              <p className="text-xs text-white/40 leading-relaxed">
+                Recipient gets an SMS-friendly claim link. They can claim with
+                their BROK user ID (if registered), a wallet address, or the
+                8-character password generated for this transfer.
+              </p>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-white/45 uppercase tracking-wide">
+                  Mobile phone (required)
+                </span>
+                <input
+                  type="tel"
+                  placeholder="+1 555 123 4567"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="bio-field__control w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-white/45 uppercase tracking-wide">
+                  BROK user ID (optional — instant if known)
+                </span>
+                <input
+                  type="text"
+                  placeholder="Recipient UUID (optional)"
+                  value={recipient}
+                  onChange={(e) => setRecipient(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none font-mono text-xs"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-white/45 uppercase tracking-wide">
+                  Recipient wallet (optional)
+                </span>
+                <input
+                  type="text"
+                  placeholder="0x… or wallet address"
+                  value={recipientWallet}
+                  onChange={(e) => setRecipientWallet(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none font-mono text-xs"
+                />
+              </label>
+              {inviteResult && (
+                <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/5 p-3 space-y-2 text-xs text-white/70">
+                  <p className="font-medium text-emerald-400/90">
+                    {inviteResult.smsSent
+                      ? "Invite sent via SMS"
+                      : "Invite ready — share via SMS"}
+                  </p>
+                  {inviteResult.smsError && (
+                    <p className="text-amber-400/90">
+                      SMS failed ({inviteResult.smsError}) — copy the text below
+                      manually.
+                    </p>
+                  )}
+                  <p>
+                    <span className="text-white/45">Claim link:</span>{" "}
+                    <a
+                      href={inviteResult.claimUrl}
+                      className="text-neon-cyan break-all hover:underline"
+                    >
+                      {inviteResult.claimUrl}
+                    </a>
+                  </p>
+                  <p>
+                    <span className="text-white/45">8-digit password:</span>{" "}
+                    <span className="font-mono text-neon-cyan">
+                      {inviteResult.claimPassword}
+                    </span>
+                  </p>
+                  <p className="text-white/45 whitespace-pre-wrap">
+                    {inviteResult.smsHint}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {panel === "withdraw" && (
+            <>
+              <h3 className="text-sm font-medium text-white/70">
+                Send $POCK to any Solana wallet
+              </h3>
+              <p className="text-xs text-white/40 leading-relaxed">
+                SPL transfer from Neobanx treasury — usually confirms within a
+                minute. Requires a linked Solana wallet on your account
+                (Custody section). Specify amount below; recipient can be any
+                valid Solana address.
+              </p>
+              {user.custody_status === "reserved" && (
+                <p className="text-xs text-amber-300/90 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
+                  Connect a Solana wallet in Custody before sending on-chain.
+                </p>
+              )}
+              <input
+                type="text"
+                placeholder="Solana wallet address (base58)"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none font-mono"
+              />
+            </>
+          )}
+
+          {panel === "gift" && (
+            <>
+              <h3 className="text-sm font-medium text-white/70">
+                Gift credits
+              </h3>
+              <p className="text-xs text-white/40 leading-relaxed">
+                Send $POCK as a gift. If you have sufficient balance, the
+                recipient gets an SMS-friendly claim link. They enter their BROK
+                ID to credit instantly — or register free via the link in the
+                message if they don&apos;t have an ID yet.
+              </p>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-white/45 uppercase tracking-wide">
+                  Recipient name (required)
+                </span>
+                <input
+                  type="text"
+                  placeholder="Friend or family name"
+                  value={giftName}
+                  onChange={(e) => setGiftName(e.target.value)}
+                  className="bio-field__control w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-white/45 uppercase tracking-wide">
+                  Mobile phone (required)
+                </span>
+                <input
+                  type="tel"
+                  placeholder="+1 555 123 4567"
+                  value={giftPhone}
+                  onChange={(e) => setGiftPhone(e.target.value)}
+                  className="bio-field__control w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-white/45 uppercase tracking-wide">
+                  BROK user ID (optional — instant if known)
+                </span>
+                <input
+                  type="text"
+                  placeholder="Recipient UUID (optional)"
+                  value={giftRecipientId}
+                  onChange={(e) => setGiftRecipientId(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none font-mono text-xs"
+                />
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="block space-y-1.5">
+                  <span className="text-xs text-white/45 uppercase tracking-wide">
+                    $POCK amount
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={spendable}
+                    value={amount}
+                    onChange={(e) => syncUsdFromPock(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm tabular-nums focus:border-neon-cyan/40 outline-none"
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs text-white/45 uppercase tracking-wide">
+                    USD equivalent
+                  </span>
+                  <input
+                    type="number"
+                    min={0.01}
+                    step={0.01}
+                    value={usdAmount}
+                    onChange={(e) => syncPockFromUsd(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm tabular-nums focus:border-neon-cyan/40 outline-none"
+                  />
+                </label>
+              </div>
+              <p className="text-[11px] text-white/35">
+                Retail anchor {formatUsd(pockToUsd(1))} per $POCK · spendable
+                balance {spendable} $POCK
+              </p>
+              <DigitalAssetDisclaimer compact />
+              {inviteResult?.inviteKind === "gift" && (
+                <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/5 p-3 space-y-2 text-xs text-white/70">
+                  <p className="font-medium text-emerald-400/90">
+                    {inviteResult.smsSent
+                      ? `Gift SMS sent to ${inviteResult.recipientName}`
+                      : `Gift ready — share via SMS to ${inviteResult.recipientName}`}
+                  </p>
+                  {inviteResult.smsError && (
+                    <p className="text-amber-400/90">
+                      SMS failed ({inviteResult.smsError}) — copy the text below
+                      manually.
+                    </p>
+                  )}
+                  <p>
+                    <span className="text-white/45">Claim link:</span>{" "}
+                    <a
+                      href={inviteResult.claimUrl}
+                      className="text-neon-cyan break-all hover:underline"
+                    >
+                      {inviteResult.claimUrl}
+                    </a>
+                  </p>
+                  <p>
+                    <span className="text-white/45">8-digit password:</span>{" "}
+                    <span className="font-mono text-neon-cyan">
+                      {inviteResult.claimPassword}
+                    </span>
+                  </p>
+                  {inviteResult.registerUrl && (
+                    <p>
+                      <span className="text-white/45">Register link:</span>{" "}
+                      <a
+                        href={inviteResult.registerUrl}
+                        className="text-neon-cyan break-all hover:underline"
+                      >
+                        {inviteResult.registerUrl}
+                      </a>
+                    </p>
+                  )}
+                  <p className="text-white/45 whitespace-pre-wrap">
+                    {inviteResult.smsHint}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {panel === "impact" && (
+            <>
+              <h3 className="text-sm font-medium text-white/70">
+                Impact options
+              </h3>
+              <p className="text-xs text-white/40">
+                Pledge $POCK to causes you care about. On-chain impact receipts
+                coming soon.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {IMPACT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setImpactId(opt.id)}
+                    className={`px-3 py-2 rounded-lg text-xs border transition-colors ${
+                      impactId === opt.id
+                        ? "border-neon-cyan/50 bg-neon-cyan/10 text-neon-cyan"
+                        : "border-white/10 text-white/55 hover:border-white/20"
+                    }`}
+                  >
+                    {opt.icon} {opt.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {panel !== "gift" && (
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+            <label className="flex-1">
+              <span className="text-xs text-white/40 block mb-1.5">Amount</span>
+              <input
+                type="number"
+                min={1}
+                max={spendable}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm tabular-nums focus:border-neon-cyan/40 outline-none"
+              />
+            </label>
+            {!confirming ? (
+              <button
+                type="button"
+                onClick={() => setConfirming(true)}
+                disabled={
+                  !amount ||
+                  parseInt(amount, 10) < 1 ||
+                  parseInt(amount, 10) > spendable ||
+                  (panel === "send" && phone.replace(/\D/g, "").length < 10) ||
+                  (panel === "withdraw" && !address.trim())
+                }
+                className="px-6 py-2.5 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-40 transition-colors"
+              >
+                Review
+              </button>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="px-4 py-2.5 rounded-xl border border-white/15 text-white/55 text-sm hover:border-white/25 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  disabled={confirming}
+                  className="px-6 py-2.5 rounded-xl bg-neon-cyan/20 border border-neon-cyan/60 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors"
+                >
+                  {confirming ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Confirm"
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+          )}
+
+          {panel === "gift" && (
+            <div className="flex gap-2 justify-end">
+              {!confirming ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirming(true)}
+                  disabled={
+                    !amount ||
+                    parseInt(amount, 10) < 1 ||
+                    parseInt(amount, 10) > spendable ||
+                    giftName.trim().length < 2 ||
+                    giftPhone.replace(/\D/g, "").length < 10
+                  }
+                  className="px-6 py-2.5 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-40 transition-colors"
+                >
+                  Review gift
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="px-4 py-2.5 rounded-xl border border-white/15 text-white/55 text-sm hover:border-white/25 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={confirming}
+                    className="px-6 py-2.5 rounded-xl bg-neon-cyan/20 border border-neon-cyan/60 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors"
+                  >
+                    {confirming ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      "Send gift"
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {confirming && (
+            <p className="text-xs text-amber-400/80 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
+              {panel === "gift" ? (
+                <>
+                  You&apos;re gifting {amount} $POCK
+                  {usdAmount ? ` (${formatUsd(parseFloat(usdAmount) || pockToUsd(parseInt(amount, 10)))} USD)` : ""}{" "}
+                  to {giftName.trim()}. Balance updates immediately; share the
+                  claim link via SMS.
+                </>
+              ) : (
+                <>
+                  You&apos;re about to spend {amount} $POCK. Balance will update
+                  immediately after confirmation.
+                </>
+              )}
+            </p>
+          )}
+        </motion.section>
+      )}
+
+      <TransactionHistorySection />
+
+      <PockAssetDisclaimer className="text-center" />
+    </div>
+  );
+}

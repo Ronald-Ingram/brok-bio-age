@@ -1,0 +1,27 @@
+GoDaddy DNS for bio-age.kiron.ai (after Vercel deploy)
+========================================================
+
+1. GoDaddy → kiron.ai → DNS → Add record:
+   Type:  CNAME
+   Name:  bio-age
+   Value: cname.vercel-dns.com
+   TTL:   600 (or default)
+
+2. Vercel project → Settings → Domains → Add: bio-age.kiron.ai
+
+3. Vercel env (production):
+   NEXT_PUBLIC_SITE_URL=https://bio-age.kiron.ai
+   STRIPE_SECRET_KEY=sk_live_...
+   STRIPE_WEBHOOK_SECRET=whsec_...
+   TWILIO_ACCOUNT_SID=AC...
+   TWILIO_AUTH_TOKEN=...
+   TWILIO_FROM_NUMBER=+1...
+   POCK_INVITE_SECRET=(from web/.env.local)
+   BROK_OG_ADMIN_SECRET=(from web/.env.local)
+
+4. Stripe Dashboard → Webhooks → Add endpoint:
+   URL: https://bio-age.kiron.ai/api/stripe/webhook
+   Events: checkout.session.completed, invoice.paid, customer.subscription.deleted
+
+5. Optional — proxy kiron.ai/buy-pock to bio-age (GoDaddy forwarding or Caddy):
+   Forward: kiron.ai/buy-pock → https://bio-age.kiron.ai/buy-pock

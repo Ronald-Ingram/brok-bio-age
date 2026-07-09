@@ -1,0 +1,59 @@
+20251015(RI)
+
+                     A spreadsheet to calculate Mortality Score and Phenotypic Age.  Author: John G. Cramer
+Refs:  "An epigenetic biomarker of aging for lifespan and healthspan", Aging (Albany NY) 10(4)  573-591 (2018 Apr 18).
+"A New Epigenetic Clock for Aging and Life Expectancy", Talk by Morgan Levine
+Def. Albumin Creatinine Glucose CRP  LympocyteMean Cell 
+Volume
+ Red Cell 
+Dist Width
+ Alkaline 
+Phosphatase
+White Blood 
+Cells  Age
++ - + + = - = + - 57
+Input 4.6 0.93 94 3.24 27 96 13 141 6.2 57
+Units mg/dL mg/dL mg/dL mg/L  %  fL  %  U/L 10^3 cells/mL  years
+Conv 10 88.4 0.0555 0.1
+cInput 46.00 82.2120 5.217 -1.1270 27.00 96.00 13.00 141.00 6.20 57.00
+ cUnits g/L mmol/L mmol/L Ln(mg/dL)  %  fL  %  U/L 10^3 cells/mL  years
+Wts -0.0336 0.0095 0.1953 0.0954 -0.012 0.0268 0.3306 0.0019 0.0554 0.0804
+Terms -1.5456 0.7810 1.0189 -0.1075 -0.3240 2.5728 4.2978 0.2679 0.3435 4.5828
+Calculation:
+t 10 years 120 months
+g 0.0076927
+b0 -19.9067
+LinComb MortScorePtypic Ageest. DNAm Ageest. D MScore
+Results -8.0191 0.063 54.95 54.09 0.066
+Testosterone: 1492
+Estimated MELD:?
+20250622(RI)
+                     A spreadsheet to calculate Mortality Score and Phenotypic Age.  Author: John G. Cramer
+Refs:  "An epigenetic biomarker of aging for lifespan and healthspan", Aging (Albany NY) 10(4)  573-591 (2018 Apr 18).
+"A New Epigenetic Clock for Aging and Life Expectancy", Talk by Morgan Levine
+Def. Albumin Creatinine Glucose CRP  LympocyteMean Cell 
+Volume
+ Red Cell 
+Dist Width
+ Alkaline 
+Phosphatase
+White Blood 
+Cells  Age
++ - + + = - = + - 56
+Input 4.4 0.87 105 2.36 27 97 13.7 136 6 56
+Units mg/dL mg/dL mg/dL mg/L  %  fL  %  U/L 10^3 cells/mL  years
+Conv 10 88.4 0.0555 0.1
+cInput 44.00 76.9080 5.8275 -1.4439 27.00 97.00 13.70 136.00 6.00 56.00
+ cUnits g/L mmol/L mmol/L Ln(mg/dL)  %  fL  %  U/L 10^3 cells/mL  years
+Wts -0.0336 0.0095 0.1953 0.0954 -0.012 0.0268 0.3306 0.0019 0.0554 0.0804
+Terms -1.4784 0.7306 1.1381 -0.1378 -0.3240 2.5996 4.5292 0.2584 0.3324 4.5024
+Calculation:
+t 10 y
+20260624(RI)
+
+                     A spreadsheet to calculate Mortality Score and Phenotypic Age.  Author: John G. CramerRefs:  "An epigenetic biomarker of aging for lifespan and healthspan", Aging (Albany NY) 10(4)  573-591 (2018 Apr 18)."A New Epigenetic Clock for Aging and Life Expectancy", Talk by Morgan Levine
+Def. Albumin Creatinine Glucose CRP  LympocyteMean Cell Volume Red Cell Dist Width Alkaline PhosphataseWhite Blood Cells  Age
+Input 4.4 0.93 95 1.55 28 94 12.8 160 5.5 58Units mg/dL mg/dL mg/dL mg/L  %  fL  %  U/L 10^3 cells/mL  yearsConv 10 88.4 0.0555 0.1cInput 44.00 82.2120 5.2725 -1.8643 28.00 94.00 12.80 160.00 5.50 58.00 cUnits g/L mmol/L mmol/L Ln(mg/dL)  %  fL  %  U/L 10^3 cells/mL  yearsWts -0.0336 0.0095 0.1953 0.0954 -0.012 0.0268 0.3306 0.0019 0.0554 0.0804Terms -1.4784 0.7810 1.0297 -0.1779 -0.3360 2.5192 4.2317 0.3040 0.3047 4.6632Calculation:t 10 years 120 monthsg 0.0076927b0 -19.9067LinCombMortScorePtypic Ageest. DNAm Ageest. D MScoreResults -8.0654 0.060 54.45 53.61 0.063Prior 4.6 0.93 94 3.24 27 96 13 141 6.2 57Testosterone: 1239Testosterone prior:1500+ -0.58
+20251230(RI)
+                     A spreadsheet to calculate Mortality Score and Phenotypic Age.  Author: John G. CramerRefs:  "An epigenetic biomarker of aging for lifespan and healthspan", Aging (Albany NY) 10(4)  573-591 (2018 Apr 18)."A New Epigenetic Clock for Aging and Life Expectancy", Talk by Morgan Levine
+Def. Albumin Creatinine Glucose CRP  LympocyteMean Cell Volume Red Cell Dist Width Alkaline 

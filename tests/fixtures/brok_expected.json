@@ -1,0 +1,150 @@
+{
+  "tolerance_years": 0.15,
+  "cases": [
+    {
+      "id": "case_20260630_default",
+      "note": "Latest labs, creatine + T=1239, default BROK config",
+      "inputs": {
+        "albumin_g_dl": 4.4,
+        "creatinine_mg_dl": 0.93,
+        "glucose_mg_dl": 95.0,
+        "crp_mg_l": 1.55,
+        "lymphocyte_pct": 28.0,
+        "mcv_fl": 94.0,
+        "rdw_pct": 12.8,
+        "alp_u_l": 160.0,
+        "wbc_10e3": 5.5,
+        "chronological_age": 57.0
+      },
+      "context": {
+        "creatine_supplementation": true,
+        "testosterone_ng_dl": 1239
+      },
+      "config": {
+        "age_mode": "scaled",
+        "age_alpha": 0.95
+      },
+      "expected": {
+        "standard_pheno_age": 53.57,
+        "brok_pheno_age": 46.81,
+        "creatinine_discount": 0.5,
+        "delta_brok_vs_standard": -6.76
+      }
+    },
+    {
+      "id": "case_standard_mode",
+      "note": "AgeMode.standard with no context — BROK equals Levine",
+      "inputs": {
+        "albumin_g_dl": 4.4,
+        "creatinine_mg_dl": 0.93,
+        "glucose_mg_dl": 95.0,
+        "crp_mg_l": 1.55,
+        "lymphocyte_pct": 28.0,
+        "mcv_fl": 94.0,
+        "rdw_pct": 12.8,
+        "alp_u_l": 160.0,
+        "wbc_10e3": 5.5,
+        "chronological_age": 57.0
+      },
+      "context": {},
+      "config": {
+        "age_mode": "standard"
+      },
+      "expected": {
+        "standard_pheno_age": 53.57,
+        "brok_pheno_age": 53.57,
+        "creatinine_discount": 0.0,
+        "delta_brok_vs_standard": 0.0
+      }
+    },
+    {
+      "id": "case_hba1c_5_0",
+      "note": "HbA1c 5.0% drives glucose term (eAG 96.8 mg/dL)",
+      "inputs": {
+        "albumin_g_dl": 4.4,
+        "creatinine_mg_dl": 0.93,
+        "glucose_mg_dl": 95.0,
+        "hba1c_pct": 5.0,
+        "crp_mg_l": 1.55,
+        "lymphocyte_pct": 28.0,
+        "mcv_fl": 94.0,
+        "rdw_pct": 12.8,
+        "alp_u_l": 160.0,
+        "wbc_10e3": 5.5,
+        "chronological_age": 57.0
+      },
+      "context": {
+        "creatine_supplementation": true,
+        "testosterone_ng_dl": 1239
+      },
+      "config": {
+        "age_mode": "scaled",
+        "age_alpha": 0.95,
+        "use_hba1c_over_glucose": true
+      },
+      "expected": {
+        "brok_pheno_age": 47.02,
+        "glucose_source": "hba1c_eag(5.0%)"
+      }
+    },
+    {
+      "id": "pace_20251124_to_20260630",
+      "note": "Pace between Nov 2025 and Jun 2026 draws",
+      "current": {
+        "test_date": "2026-06-30",
+        "chronological_age": 57.0,
+        "inputs": {
+          "albumin_g_dl": 4.4,
+          "creatinine_mg_dl": 0.93,
+          "glucose_mg_dl": 95.0,
+          "crp_mg_l": 1.55,
+          "lymphocyte_pct": 28.0,
+          "mcv_fl": 94.0,
+          "rdw_pct": 12.8,
+          "alp_u_l": 160.0,
+          "wbc_10e3": 5.5,
+          "chronological_age": 57.0
+        },
+        "context": {
+          "creatine_supplementation": true,
+          "testosterone_ng_dl": 1239
+        }
+      },
+      "prior": {
+        "test_date": "2025-11-24",
+        "chronological_age": 57.0,
+        "inputs": {
+          "albumin_g_dl": 4.7,
+          "creatinine_mg_dl": 0.83,
+          "glucose_mg_dl": 92.0,
+          "crp_mg_l": 1.51,
+          "lymphocyte_pct": 26.0,
+          "mcv_fl": 95.0,
+          "rdw_pct": 13.1,
+          "alp_u_l": 126.0,
+          "wbc_10e3": 5.8,
+          "chronological_age": 57.0
+        },
+        "context": {
+          "creatine_supplementation": true,
+          "testosterone_ng_dl": 1500
+        }
+      },
+      "config": {
+        "age_mode": "scaled",
+        "age_alpha": 0.95
+      },
+      "expected": {
+        "prior_brok_pheno_age": 45.98,
+        "current_brok_pheno_age": 46.81,
+        "chrono_elapsed_years": 0.6,
+        "pheno_elapsed_standard": 1.29,
+        "pheno_elapsed_brok": 0.83,
+        "pace_ratio_standard": 2.15,
+        "pace_ratio_brok": 1.39,
+        "deceleration_years_standard": -0.69,
+        "deceleration_years_brok": -0.23
+      }
+    }
+  ]
+}

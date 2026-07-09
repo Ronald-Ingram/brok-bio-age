@@ -1,0 +1,29 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# Node
+web/node_modules/
+web/.next/
+web/out/
+
+# Env — never commit secrets
+.env
+.env.*
+!.env.example
+!.env.local.example
+.env.local
+web/.env.local
+web/.env.vercel.*
+.env.vercel.check
+buy-pock-preview.png
+api/.env
+
+# OS
+.DS_Store
