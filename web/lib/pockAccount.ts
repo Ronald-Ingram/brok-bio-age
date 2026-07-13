@@ -21,8 +21,9 @@ export function displayUserId(userId: string, revealed: boolean): string {
   return revealed ? userId : maskUserId(userId);
 }
 
-export function displayAccountNumber(userId: string, revealed: boolean): string {
-  return revealed ? formatBrokAccountNumber(userId) : maskAccountNumber(userId);
+/** Account code is always visible — needed to link devices. Not a secret. */
+export function displayAccountNumber(userId: string, _revealed?: boolean): string {
+  return formatBrokAccountNumber(userId);
 }
 
 export function formatBrokAccountLabel(user: BrokUser): string {
@@ -36,7 +37,19 @@ export function shortUserId(userId: string): string {
 }
 
 const REVEAL_SESSION_KEY = "brok_account_revealed";
+const MAIN_ACCOUNT_CODE_KEY = "brok_main_account_code";
 const REVEAL_TTL_MS = 30 * 60 * 1000;
+
+/** Remember account code on this browser for linking other devices. */
+export function saveMainAccountCode(userId: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(MAIN_ACCOUNT_CODE_KEY, formatBrokAccountNumber(userId));
+}
+
+export function loadMainAccountCode(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(MAIN_ACCOUNT_CODE_KEY);
+}
 
 export function isAccountIdRevealed(userId: string): boolean {
   if (typeof window === "undefined") return false;

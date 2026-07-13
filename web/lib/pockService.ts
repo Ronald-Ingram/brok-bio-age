@@ -209,7 +209,8 @@ export async function sendToUser(
 
 export interface PockInviteResult {
   claimUrl: string;
-  claimPassword: string;
+  giftUrl?: string | null;
+  claimPassword: string | null;
   amount: number;
   phone: string | null;
   email?: string | null;
@@ -221,6 +222,8 @@ export interface PockInviteResult {
   inviteKind: "transfer" | "gift";
   recipientName: string | null;
   usdEquivalent: number | null;
+  usdPerPockQuote?: number | null;
+  quoteSource?: "dexscreener" | "retail_anchor" | null;
   registerUrl: string | null;
   personalMessage?: string | null;
   senderName?: string | null;
@@ -267,6 +270,36 @@ export async function createPockInvite(options: {
   });
 }
 
+export interface GiftAutoClaimResult {
+  ok: true;
+  amount: number;
+  alreadyClaimed: boolean;
+  message: string;
+}
+
+export async function autoClaimGiftInvite(token: string): Promise<GiftAutoClaimResult> {
+  await ensureAuthSession();
+  const supabase = getSupabase();
+  const { data: sessionData } = await supabase.auth.getSession();
+  const session = sessionData.session;
+  if (!session) throw new Error("auth_required");
+
+  const res = await fetch("/api/pock/auto-claim-gift", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      accessToken: session.access_token,
+      token: token.trim(),
+    }),
+  });
+
+  const data = (await res.json()) as GiftAutoClaimResult & { error?: string };
+  if (!res.ok) {
+    throw new Error(data.error ?? "claim_failed");
+  }
+  return data;
+}
+
 export async function createGiftInvite(options: {
   amount: number;
   usdEquivalent: number;
@@ -277,9 +310,6 @@ export async function createGiftInvite(options: {
   recipientBrokId?: string;
 }): Promise<PockInviteResult> {
   if (!options.recipientName.trim()) throw new Error("recipient_name_required");
-  if (!options.phone?.trim() && !options.email?.trim()) {
-    throw new Error("contact_required");
-  }
   return postPockInvite({
     inviteKind: "gift",
     amount: options.amount,

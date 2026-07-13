@@ -13,15 +13,10 @@ import {
 } from "@/lib/modelRouterConfig";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { SUBSCRIPTION_TIERS } from "@/lib/subscriptionConfig";
+import { assertAdmin } from "@/lib/adminAuth";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-
-function assertAdmin(req: Request): boolean {
-  const secret = process.env.BROK_OG_ADMIN_SECRET?.trim();
-  if (!secret) return false;
-  return req.headers.get("x-brok-og-admin")?.trim() === secret;
-}
 
 export async function GET(req: Request) {
   if (!assertAdmin(req)) {
@@ -57,7 +52,10 @@ export async function GET(req: Request) {
       .select("float_remaining, float_allocated, wallet_address, updated_at")
       .eq("id", "neobanx")
       .maybeSingle(),
-    supabase.from("core_knowledge").select("id", { count: "exact", head: true }),
+    // core_knowledge has no `id` column (tags + content + created_at) — selecting id zeroes the count.
+    supabase
+      .from("core_knowledge")
+      .select("tags", { count: "exact", head: true }),
     supabase
       .from("stripe_subscription_events")
       .select("tier, event_kind, created_at")
@@ -213,6 +211,9 @@ export async function GET(req: Request) {
     kironCanon: {
       documents: canonRes.error ? 0 : (canonRes.count ?? 0),
       error: canonRes.error?.message ?? null,
+      // Full core_knowledge row count (Canon books + FAQs + strategic docs).
+      note:
+        "Includes Kiron Canon manuscripts, FAQ truth rows, and strategic core_knowledge docs",
     },
     revenue: {
       subscriptionCheckoutsTracked: stripeEventsRes.data?.length ?? 0,

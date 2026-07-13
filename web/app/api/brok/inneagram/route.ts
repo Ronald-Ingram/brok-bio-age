@@ -1,3 +1,4 @@
+import { syncInneagramFromFormalTest } from "@/lib/brokUserFacts";
 import { inneagramReportHtml, inneagramReportMarkdown } from "@/lib/ingramInneagramReport";
 import { scoreQuickInneagram, type InneagramScoreResult } from "@/lib/ingramInneagram";
 import { getServiceSupabase } from "@/lib/supabase/server";
@@ -56,6 +57,9 @@ export async function POST(req: Request) {
         .select("id")
         .single();
       if (!error && data) stored_id = data.id as string;
+      if (body.user_id) {
+        void syncInneagramFromFormalTest(body.user_id, result);
+      }
     } catch {
       /* table may not exist yet — client still has localStorage */
     }

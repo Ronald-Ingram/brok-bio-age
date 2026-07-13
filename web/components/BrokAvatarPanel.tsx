@@ -6,6 +6,7 @@ import {
 } from "@/components/HeyGenLiveAvatar";
 import { InneagramPanel } from "@/components/InneagramPanel";
 import { IemReportModal } from "@/components/IemReportModal";
+import { sanitizeBrokAvatarError } from "@/lib/brokAvatarErrors";
 import { BROK_REFERENCE_IMAGE } from "@/lib/brokApiConfig";
 import type { IemReportPayload } from "@/lib/iemReportTypes";
 import {
@@ -30,9 +31,18 @@ import {
   X,
 } from "lucide-react";
 import Image from "next/image";
+import { brokAuthHeaders } from "@/lib/authFetch";
 import { buildPageContextPayload } from "@/lib/brokPageContext";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+type ChatTurn = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+};
+
+const threadStorageKey = (userId: string) => `brok_thread_id:${userId}`;
 
 interface BrokStatus {
   brokApi: boolean;
@@ -76,7 +86,9 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [message, setMessage] = useState("");
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [response, setResponse] = useState("");
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [chatTurns, setChatTurns] = useState<ChatTurn[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [fileIds, setFileIds] = useState<string[]>([]);
   const [fileContexts, setFileContexts] = useState<
     { filename: string; text: string }[]
@@ -91,9 +103,25 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [speakProgress, setSpeakProgress] = useState<string | null>(null);
   const [lastUserMessage, setLastUserMessage] = useState("");
+  const [lastModel, setLastModel] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const useHeyGenLive = Boolean(avatarOn && status?.heygen);
+
+  // Stable callbacks so HeyGenLiveAvatar does not reconnect-loop every render.
+  const handleAvatarError = useCallback((msg: string) => {
+    setError(sanitizeBrokAvatarError(msg));
+  }, []);
+  const handleAvatarStatus = useCallback((s: "idle" | "connecting" | "live" | "error") => {
+    setHeygenLive(s === "live");
+  }, []);
+  const handleAvatarSpeakProgress = useCallback((current: number, total: number) => {
+    setSpeakProgress(
+      total > 1
+        ? `Speaking part ${current} of ${total}…`
+        : "Generating speech…"
+    );
+  }, []);
 
   const loadStatus = useCallback(async () => {
     const res = await fetch("/api/brok/status");
@@ -104,11 +132,85 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     loadStatus();
   }, [loadStatus]);
 
-  const speechPayload = (text: string, userMessage: string) => {
-    const fullLength = wantsFullLengthSpeech(userMessage);
+  const loadThreadHistory = useCallback(async () => {
+    if (!user?.id) {
+      setThreadId(null);
+      setChatTurns([]);
+      return;
+    }
+
+    const stored =
+      typeof window !== "undefined"
+        ? localStorage.getItem(threadStorageKey(user.id))
+        : null;
+
+    setHistoryLoading(true);
+    try {
+      const qs = stored ? `?thread_id=${encodeURIComponent(stored)}` : "";
+      const res = await fetch(`/api/brok/threads${qs}`, {
+        headers: await brokAuthHeaders(),
+      });
+      if (!res.ok) return;
+
+      const data = (await res.json()) as {
+        thread_id?: string | null;
+        messages?: ChatTurn[];
+      };
+
+      if (data.thread_id) {
+        setThreadId(data.thread_id);
+        localStorage.setItem(threadStorageKey(user.id), data.thread_id);
+      } else {
+        setThreadId(null);
+        localStorage.removeItem(threadStorageKey(user.id));
+      }
+
+      const turns = data.messages ?? [];
+      setChatTurns(turns);
+      const lastAssistant = [...turns]
+        .reverse()
+        .find((m) => m.role === "assistant");
+      setResponse(lastAssistant?.content ?? "");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    void loadThreadHistory();
+  }, [loadThreadHistory]);
+
+  const startNewConversation = async () => {
+    if (!user?.id) return;
+    setError(null);
+    try {
+      const res = await fetch("/api/brok/threads", {
+        method: "POST",
+        headers: await brokAuthHeaders(),
+        body: JSON.stringify({
+          user_id: user.id,
+          page_pathname: pathname ?? "/",
+        }),
+      });
+      const data = (await res.json()) as { thread_id?: string; error?: string };
+      if (!res.ok || !data.thread_id) {
+        throw new Error(data.error ?? "new_thread_failed");
+      }
+      setThreadId(data.thread_id);
+      localStorage.setItem(threadStorageKey(user.id), data.thread_id);
+      setChatTurns([]);
+      setResponse("");
+      setMessage("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start new conversation");
+    }
+  };
+
+  /** Spoken narrative = full on-screen answer (TTS length cap only). No 2-sentence teaser. */
+  const speechPayload = (text: string, _userMessage: string) => {
     return {
-      text: spokenExcerpt(text, { fullLength }),
-      fullLength,
+      text: spokenExcerpt(text, { fullLength: true }),
+      fullLength: true,
     };
   };
 
@@ -123,10 +225,11 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       const payload = speechPayload(text, userMessage);
       const res = await fetch("/api/brok/voice", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await brokAuthHeaders(),
         body: JSON.stringify({
           text: payload.text,
           fullLength: payload.fullLength,
+          user_id: user?.id,
         }),
       });
       if (!res.ok) {
@@ -156,14 +259,18 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     const payload = speechPayload(text, userMessage);
     if (useHeyGenLive && heygenRef.current) {
       setVoiceLoading(true);
-      setSpeakProgress(
-        payload.fullLength ? "Preparing full-length speech…" : "Generating speech…"
-      );
+      setSpeakProgress("Speaking full answer…");
       try {
-        await heygenRef.current.speak(payload.text, payload.fullLength);
+        // One silent retry path lives inside speak(); if still down, voice-only fallback.
+        await heygenRef.current.speak(payload.text, true);
+        setError(null);
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Avatar speech failed";
-        setError(`${msg} — playing ${BROK_VOICE_CLONE_LABEL} audio instead`);
+        const msg = sanitizeBrokAvatarError(
+          e instanceof Error ? e.message : "avatar_speech_failed"
+        );
+        setError(
+          `${msg} Playing ${BROK_VOICE_CLONE_LABEL} for the full answer (text above is complete).`
+        );
         await playBrokVoice(text, userMessage, { force: true });
       } finally {
         setVoiceLoading(false);
@@ -254,12 +361,13 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       const { contexts } = await uploadPendingFiles(fileContexts, fileIds);
       const res = await fetch("/api/brok/iem-report", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await brokAuthHeaders(),
         body: JSON.stringify({
           message:
             message.trim() ||
             "Produce a formal IEM evaluation report for the attached opportunity.",
           file_contexts: contexts.length ? contexts : undefined,
+          user_id: user?.id,
         }),
       });
 
@@ -301,12 +409,21 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         }
       }
 
+      const userMsg =
+        message.trim() || "Analyze the attached file.";
+      const optimisticUser: ChatTurn = {
+        id: `pending-user-${Date.now()}`,
+        role: "user",
+        content: userMsg,
+      };
+      setChatTurns((prev) => [...prev, optimisticUser]);
+
       const res = await fetch("/api/brok/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await brokAuthHeaders(),
         body: JSON.stringify({
-          message: message.trim() || "Analyze the attached file.",
-          session_id: sessionId,
+          message: userMsg,
+          thread_id: threadId,
           user_id: user?.id,
           file_ids: uploadedIds.length ? uploadedIds : undefined,
           file_contexts: contexts.length ? contexts : undefined,
@@ -316,21 +433,43 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
 
       const data = (await res.json()) as {
         response?: string;
-        session_id?: string;
+        thread_id?: string;
         error?: string;
         hint?: string;
+        model?: string;
+        provider?: string;
+        used_backup?: boolean;
+        groq_model?: string;
       };
 
       if (!res.ok) {
+        setChatTurns((prev) => prev.filter((t) => t.id !== optimisticUser.id));
         throw new Error(data.hint ?? data.error ?? "chat_failed");
       }
 
-      const userMsg =
-        message.trim() || "Analyze the attached file.";
       setLastUserMessage(userMsg);
       const reply = data.response ?? "";
       setResponse(reply);
-      if (data.session_id) setSessionId(data.session_id);
+      const modelLabel =
+        data.model ||
+        data.groq_model ||
+        (data.provider ? String(data.provider) : null);
+      setLastModel(
+        modelLabel
+          ? `${modelLabel}${data.used_backup ? " (backup path)" : ""}`
+          : null
+      );
+      if (data.thread_id) {
+        setThreadId(data.thread_id);
+        if (user?.id) {
+          localStorage.setItem(threadStorageKey(user.id), data.thread_id);
+        }
+      }
+      setChatTurns((prev) => [
+        ...prev.filter((t) => t.id !== optimisticUser.id),
+        { id: `user-${Date.now()}`, role: "user", content: userMsg },
+        { id: `assistant-${Date.now()}`, role: "assistant", content: reply },
+      ]);
       setMessage("");
       await speakResponse(reply, userMsg);
     } catch (e) {
@@ -365,7 +504,8 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             alt="BROK static avatar"
             fill
             className={`object-contain object-center transition-opacity duration-300 ${
-              useHeyGenLive && heygenLive && avatarOn && !voiceLoading
+              // Keep live video visible during speech — never cover it with the static plate while voiceLoading.
+              useHeyGenLive && heygenLive && avatarOn
                 ? "opacity-0"
                 : "opacity-100"
             }`}
@@ -376,25 +516,12 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               <HeyGenLiveAvatar
                 ref={heygenRef}
                 enabled={avatarOn}
+                userId={user?.id}
                 avatarId={status?.heygenAvatarId}
                 sandboxMode={status?.heygenSandbox}
-                onError={(msg) => {
-                  if (msg.includes("liveavatar_403")) {
-                    setError(
-                      "LiveAvatar credits exhausted — add credits at app.liveavatar.com or keep Avatar off."
-                    );
-                  } else {
-                    setError(msg);
-                  }
-                }}
-                onStatus={(s) => setHeygenLive(s === "live")}
-                onSpeakProgress={(current, total) =>
-                  setSpeakProgress(
-                    total > 1
-                      ? `Speaking part ${current} of ${total}…`
-                      : "Generating speech…"
-                  )
-                }
+                onError={handleAvatarError}
+                onStatus={handleAvatarStatus}
+                onSpeakProgress={handleAvatarSpeakProgress}
               />
             </div>
           ) : null}
@@ -448,10 +575,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         <p className="text-[11px] text-white/40 leading-relaxed">
           {useHeyGenLive && heygenLive
             ? status?.voiceReady
-              ? `${BROK_AVATAR_LABEL} speaking — lip-sync with ${status.voiceLabel ?? BROK_VOICE_CLONE_LABEL}. Session ends after each reply.`
+              ? `${BROK_AVATAR_LABEL} live — lip-sync with ${status.voiceLabel ?? BROK_VOICE_CLONE_LABEL}. Toggle off to end session.`
               : `${BROK_AVATAR_LABEL} speaking — enable BROK Voice for lip-sync.`
             : useHeyGenLive
-              ? `${BROK_AVATAR_LABEL} armed — connects only when BROK speaks (no idle streaming). Toggle off to use voice-only or text.`
+              ? `${BROK_AVATAR_LABEL} connecting… Toggle off anytime to stop the live session and save credits.`
               : "Toggle voice or avatar off for text-only. Ask for full length to hear complete answers."}
         </p>
         {status && !status.voiceReady && (
@@ -501,6 +628,77 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             : "p-5 space-y-4"
         }`}
       >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs uppercase tracking-wider text-white/40">
+            Conversation
+          </span>
+          <button
+            type="button"
+            onClick={() => void startNewConversation()}
+            disabled={!user?.id || loading}
+            className="text-[10px] text-white/40 hover:text-neon-cyan/80 underline disabled:opacity-40"
+          >
+            New conversation
+          </button>
+        </div>
+
+        {/* Full latest answer first so mobile users see complete text without hunting history. */}
+        {response && (
+          <div className="rounded-xl border border-neon-cyan/25 bg-neon-cyan/5 p-3 sm:p-4 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10px] uppercase tracking-wider text-neon-cyan/80">
+                Full answer (matches spoken text)
+                {lastModel ? (
+                  <span className="ml-2 normal-case tracking-normal text-white/35">
+                    · {lastModel}
+                  </span>
+                ) : null}
+              </span>
+              <button
+                type="button"
+                className="text-[10px] text-white/40 hover:text-white/70 underline"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(response);
+                }}
+              >
+                Copy full text
+              </button>
+            </div>
+            <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed max-h-[min(70vh,720px)] overflow-y-auto overscroll-contain">
+              {response}
+            </p>
+          </div>
+        )}
+
+        {(chatTurns.length > 0 || historyLoading) && (
+          <div className="rounded-xl border border-white/8 bg-black/25 p-3 max-h-[min(45vh,420px)] sm:max-h-[min(52vh,520px)] overflow-y-auto space-y-3 min-h-[80px] overscroll-contain">
+            {historyLoading && chatTurns.length === 0 ? (
+              <p className="text-[11px] text-white/35 flex items-center gap-2">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading history…
+              </p>
+            ) : (
+              chatTurns.map((turn) => (
+                <div
+                  key={turn.id}
+                  className={
+                    turn.role === "user"
+                      ? "text-sm text-white/55 pl-2 border-l-2 border-neon-cyan/30"
+                      : "text-sm text-white/80 pl-2 border-l-2 border-white/15"
+                  }
+                >
+                  <span className="text-[10px] uppercase tracking-wider text-white/30 block mb-0.5">
+                    {turn.role === "user" ? "You" : "BROK"}
+                  </span>
+                  <p className="whitespace-pre-wrap leading-relaxed break-words">
+                    {turn.content}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
         <label className="block space-y-1.5 flex-1">
           <span className="text-xs uppercase tracking-wider text-white/40">
             Message
@@ -635,24 +833,17 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           saved locally + account. No voice/avatar tokens.
         </p>
 
-        {(response || error) && (
-          <div className="rounded-xl border border-white/8 bg-black/25 p-4 space-y-2 min-h-[120px]">
+        {(error || ((voiceOn || useHeyGenLive) && response)) && (
+          <div className="rounded-xl border border-white/8 bg-black/25 p-4 space-y-2">
             {error && <p className="text-sm text-red-400/90">{error}</p>}
-            {response && (
-              <p className="text-sm text-white/75 whitespace-pre-wrap leading-relaxed">
-                {response}
-              </p>
-            )}
             {(voiceOn || useHeyGenLive) && response && (
               <p className="text-[10px] text-white/35 flex items-center gap-1">
                 <Volume2 className="w-3 h-3" />
                 {voiceLoading
                   ? speakProgress ?? "Generating speech…"
-                  : wantsFullLengthSpeech(lastUserMessage)
-                    ? "Reading full response aloud"
-                    : useHeyGenLive
-                      ? "Avatar speaks opening excerpt — say full length please for entire reply"
-                      : "Voice speaks opening excerpt — say full length please for entire reply"}
+                  : useHeyGenLive
+                    ? "Avatar speaks the full answer (same text as above)"
+                    : "Voice speaks the full answer (same text as above)"}
               </p>
             )}
           </div>

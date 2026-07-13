@@ -5,7 +5,7 @@ import { formatUsd } from "@/lib/purchaseConfig";
 import { giftClaimRegisterUrl } from "@/lib/giftPockMessage";
 import { Dna, Gift, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 type ClaimMethod = "brok_id" | "wallet" | "password";
@@ -20,6 +20,7 @@ interface InviteInfo {
 }
 
 function ClaimContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const [method, setMethod] = useState<ClaimMethod>("password");
@@ -42,10 +43,16 @@ function ClaimContent() {
         if (!res.ok) return null;
         return (await res.json()) as InviteInfo;
       })
-      .then((data) => setInviteInfo(data))
+      .then((data) => {
+        if (data?.kind === "gift") {
+          router.replace(`/genius-wallet?claim=${encodeURIComponent(token)}`);
+          return;
+        }
+        setInviteInfo(data);
+      })
       .catch(() => setInviteInfo(null))
       .finally(() => setInfoLoading(false));
-  }, [token]);
+  }, [token, router]);
 
   const submit = async () => {
     if (!token) {

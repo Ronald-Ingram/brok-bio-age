@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import { creditPockFromStripe } from "@/lib/stripePockCredit";
+import { claimGiftForUser, GiftClaimError } from "@/lib/pockGiftClaimServer";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import {
   isValidClaimPassword,
@@ -39,6 +40,17 @@ export async function POST(req: Request) {
     const inviteKey = `invite-${createHash("sha256").update(token).digest("hex").slice(0, 40)}`;
 
     if (method === "password") {
+      if (payload.kind === "gift") {
+        return NextResponse.json(
+          {
+            error: "gift_use_wallet_link",
+            message:
+              "Gifts now use one link only. Open your gift link in Genius Wallet to claim automatically.",
+          },
+          { status: 400 }
+        );
+      }
+
       const pwd = body.claimPassword?.trim().toUpperCase();
       if (!pwd || !isValidClaimPassword(pwd)) {
         return NextResponse.json({ error: "password_invalid" }, { status: 400 });
@@ -48,9 +60,7 @@ export async function POST(req: Request) {
       }
 
       const registerHint =
-        payload.kind === "gift"
-          ? "Create your free BROK account, then return to this claim page and enter your new BROK user ID to receive the gift."
-          : "Create a BROK account (or sign in) and return to this claim page with your BROK user ID to complete the transfer.";
+        "Create a BROK account (or sign in) and return to this claim page with your BROK user ID to complete the transfer.";
 
       return NextResponse.json({
         ok: true,
@@ -77,12 +87,25 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "recipient_not_found" }, { status: 404 });
       }
 
-      const creditNote =
-        payload.kind === "gift"
-          ? payload.recipientName
-            ? `Gift for ${payload.recipientName} · reserved in Genius Wallet`
-            : "Gift $POCK received · reserved in Genius Wallet"
-          : `POCK invite from ${payload.senderId.slice(0, 8)}… · reserved custody`;
+      if (payload.kind === "gift") {
+        try {
+          const giftResult = await claimGiftForUser(supabase, brokUserId, token);
+          return NextResponse.json({
+            ok: true,
+            method: "brok_id",
+            amount: giftResult.amount,
+            kind: payload.kind,
+            message: giftResult.message,
+          });
+        } catch (e) {
+          if (e instanceof GiftClaimError) {
+            return NextResponse.json({ error: e.code }, { status: e.status });
+          }
+          throw e;
+        }
+      }
+
+      const creditNote = `POCK invite from ${payload.senderId.slice(0, 8)}… · reserved custody`;
 
       try {
         await creditPockFromStripe(supabase, {
@@ -97,20 +120,12 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: msg }, { status: 500 });
       }
 
-      const usdSuffix =
-        payload.kind === "gift" && payload.usdEquivalent
-          ? ` (~$${payload.usdEquivalent.toFixed(2)} USD)`
-          : "";
-
       return NextResponse.json({
         ok: true,
         method: "brok_id",
         amount: payload.amount,
         kind: payload.kind,
-        message:
-          payload.kind === "gift"
-            ? `🎁 ${payload.amount} $POCK gift${usdSuffix} credited to your BROK account.`
-            : `${payload.amount} $POCK credited to your BROK account.`,
+        message: `${payload.amount} $POCK credited to your BROK account.`,
       });
     }
 

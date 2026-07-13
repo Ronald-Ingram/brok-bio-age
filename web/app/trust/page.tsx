@@ -69,7 +69,7 @@ export default function TrustPage() {
                   +
                 </span>
               </summary>
-              <p className="px-5 pb-4 text-sm leading-relaxed text-white/55 border-t border-white/5 pt-3">
+              <p className="px-5 pb-4 text-sm leading-relaxed text-white/55 border-t border-white/5 pt-3 whitespace-pre-line">
                 {item.answer}
               </p>
             </details>
@@ -86,6 +86,9 @@ export default function TrustPage() {
       <nav className="mt-10 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-white/45">
         <Link href="/genius-wallet" className="hover:text-neon-cyan transition-colors">
           Genius Wallet
+        </Link>
+        <Link href="#link-device" className="hover:text-neon-cyan transition-colors">
+          Link devices
         </Link>
         <Link href="/buy-pock" className="hover:text-neon-cyan transition-colors">
           Buy $POCK

@@ -4,6 +4,7 @@ export {
   normalizeForSpeech,
   extractSentences,
   wantsFullLengthSpeech,
+  wantsDetailedAnswer,
   MAX_FULL_SPOKEN_CHARS,
 } from "./spokenText";
 export type { SpokenExcerptOptions } from "./spokenText";

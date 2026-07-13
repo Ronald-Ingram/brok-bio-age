@@ -9,6 +9,8 @@ export interface IngestedFile {
 }
 
 export const MAX_FILE_CHARS = 10_000;
+/** Groq chat prompt cap — keeps file context from dominating TPD. */
+export const CHAT_FILE_CHARS = 6_000;
 export const MAX_ATTACHMENTS = 5;
 
 function bioageApiBase(): string | null {
@@ -135,7 +137,7 @@ export function formatFileContextsForPrompt(
   return contexts
     .map(
       (c) =>
-        `--- Attached file: ${c.filename} ---\n${c.text.slice(0, MAX_FILE_CHARS)}`
+        `--- Attached file: ${c.filename} ---\n${c.text.slice(0, CHAT_FILE_CHARS)}`
     )
     .join("\n\n");
 }

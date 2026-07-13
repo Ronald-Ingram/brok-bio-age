@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from "fs";
 import { join } from "path";
+import { assertAdmin } from "@/lib/adminAuth";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -11,12 +12,6 @@ const MIGRATION_ORDER = [
   "004_pock_og_grandfather.sql",
   "005_corp_wallet_funding.sql",
 ];
-
-function assertAdmin(req: Request): boolean {
-  const secret = process.env.BROK_OG_ADMIN_SECRET?.trim();
-  if (!secret) return false;
-  return req.headers.get("x-brok-og-admin")?.trim() === secret;
-}
 
 function migrationsDir(): string {
   return join(process.cwd(), "..", "supabase", "migrations");

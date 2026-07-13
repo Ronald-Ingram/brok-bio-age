@@ -1,5 +1,6 @@
-import { createHeyGenLiveSession } from "@/lib/heygenLiveAvatar";
 import { heygenConfigured } from "@/lib/brokApiConfig";
+import { sanitizeBrokAvatarError } from "@/lib/brokAvatarErrors";
+import { createHeyGenLiveSession } from "@/lib/heygenLiveAvatar";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -9,8 +10,8 @@ export async function POST() {
   if (!heygenConfigured()) {
     return NextResponse.json(
       {
-        error: "heygen_not_configured",
-        hint: "Set HEYGEN_API_KEY and HEYGEN_AVATAR_ID (LiveAvatar UUID) on Vercel",
+        error: "avatar_not_configured",
+        hint: sanitizeBrokAvatarError("avatar_not_configured"),
       },
       { status: 503 }
     );
@@ -20,14 +21,23 @@ export async function POST() {
     const session = await createHeyGenLiveSession();
     if (!session.wsUrl) {
       return NextResponse.json(
-        { error: "heygen_no_websocket", hint: "LITE session missing ws_url" },
+        {
+          error: "avatar_session_incomplete",
+          hint: sanitizeBrokAvatarError("avatar_no_websocket"),
+        },
         { status: 502 }
       );
     }
     return NextResponse.json(session);
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "heygen_session_failed";
-    console.error("HeyGen session error:", e);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    const msg = e instanceof Error ? e.message : "avatar_session_failed";
+    console.error("BROK avatar session error:", e);
+    return NextResponse.json(
+      {
+        error: "avatar_session_failed",
+        hint: sanitizeBrokAvatarError(msg),
+      },
+      { status: 502 }
+    );
   }
 }

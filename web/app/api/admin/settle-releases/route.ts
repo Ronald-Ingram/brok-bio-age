@@ -1,16 +1,11 @@
 import { settlePendingCustodyReleases } from "@/lib/custodyReleaseExecutor";
 import { corpWalletSignerConfigured } from "@/lib/solanaCorpWallet";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { assertAdmin } from "@/lib/adminAuth";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
-
-function assertAdmin(req: Request): boolean {
-  const secret = process.env.BROK_OG_ADMIN_SECRET?.trim();
-  if (!secret) return false;
-  return req.headers.get("x-brok-og-admin")?.trim() === secret;
-}
 
 export async function GET(req: Request) {
   if (!assertAdmin(req)) {

@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   if (!heygenConfigured()) {
-    return NextResponse.json({ error: "heygen_not_configured" }, { status: 503 });
+    return NextResponse.json({ error: "avatar_not_configured" }, { status: 503 });
   }
 
   const body = (await req.json()) as { sessionId?: string };

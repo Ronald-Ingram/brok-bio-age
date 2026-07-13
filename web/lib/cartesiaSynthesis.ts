@@ -6,7 +6,7 @@ const CARTESIA_VERSION = "2026-03-01";
 const HEYGEN_PCM_SAMPLE_RATE = 24_000;
 const CARTESIA_MODEL = "sonic-3.5";
 const CARTESIA_CHUNK_CHARS = 1_500;
-const CARTESIA_MAX_SEGMENTS = 12;
+const CARTESIA_MAX_SEGMENTS = 16;
 
 function cartesiaHeaders(): Record<string, string> {
   if (!CARTESIA_API_KEY) throw new Error("cartesia_api_key_missing");
@@ -75,7 +75,7 @@ export async function synthesizeCartesiaWavBlob(
   text: string,
   opts?: { fullLength?: boolean }
 ): Promise<{ wav: Buffer; segments: number }> {
-  const limit = opts?.fullLength ? 7_500 : 2_000;
+  const limit = opts?.fullLength ? 12_000 : 4_000;
   const normalized = normalizeForSpeech(text).slice(0, limit);
   const parts = chunkTextForTts(
     normalized,
@@ -96,7 +96,7 @@ export async function synthesizeCartesiaPcmForHeyGen(
   text: string,
   opts?: { fullLength?: boolean }
 ): Promise<{ chunks: string[]; segments: number }> {
-  const limit = opts?.fullLength ? 7_500 : 2_000;
+  const limit = opts?.fullLength ? 12_000 : 4_000;
   const normalized = normalizeForSpeech(text).slice(0, limit);
   const parts = chunkTextForTts(
     normalized,

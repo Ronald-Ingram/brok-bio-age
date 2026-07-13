@@ -4,14 +4,24 @@ export const CONTINUE_READING_CUE = "Continue reading below.";
 const MAX_SPOKEN_SENTENCES = 2;
 const MAX_SPOKEN_CHARS = 480;
 
-/** Cap for full-length read-aloud — chunked XTTS stays within server timeout. */
-export const MAX_FULL_SPOKEN_CHARS = 7_500;
+/** Cap for full-length read-aloud — chunked TTS stays within server timeout. */
+export const MAX_FULL_SPOKEN_CHARS = 12_000;
 
 const FULL_LENGTH_REQUEST_RE =
   /\b(full\s*length|read\s*(?:me\s*)?(?:the\s*)?(?:whole|entire|full|complete)|speak\s*(?:the\s*)?(?:whole|entire|full|complete)|read\s*all(?:\s*of\s*it)?|verbatim|out\s*loud\s*(?:all|everything|the\s*full)|complete\s*response|don't\s*truncate|do\s*not\s*truncate|no\s*truncat(?:e|ion))\b/i;
 
+/** User asked for depth in the chat reply (written answer), not only spoken length. */
+const DETAILED_ANSWER_RE =
+  /\b(long\s*answer|detailed|in\s*detail|full\s*detail|more\s*detail|thorough|comprehensive|expand(?:\s*on)?|deep\s*dive|tell\s*me\s*everything|explain\s*(?:fully|thoroughly|in\s*depth|at\s*length)|go\s*deep|as\s*much\s*detail|full\s*(?:response|explanation|write[- ]?up)|don't\s*truncate|do\s*not\s*truncate|no\s*truncat(?:e|ion)|write\s*a\s*long)\b/i;
+
 export function wantsFullLengthSpeech(userMessage: string): boolean {
-  return FULL_LENGTH_REQUEST_RE.test(userMessage.trim());
+  const m = userMessage.trim();
+  return FULL_LENGTH_REQUEST_RE.test(m) || DETAILED_ANSWER_RE.test(m);
+}
+
+/** Prefer higher max_tokens + deeper Kiron Canon when the user asks for length/depth. */
+export function wantsDetailedAnswer(userMessage: string): boolean {
+  return DETAILED_ANSWER_RE.test(userMessage.trim()) || wantsFullLengthSpeech(userMessage);
 }
 
 export interface SpokenExcerptOptions {
@@ -65,12 +75,18 @@ function brokToBrock(text: string): string {
     .replace(/\bBrok('s)?\b/g, "Brock$1");
 }
 
-/** $POCK → "Spock"; Kiron → "K eye ron" (long I as "eye"). */
+/**
+ * Brand TTS rules:
+ * - $POCK / POCK → always "Spock"
+ * - Neobanx / Kiron: leave natural (do NOT spell out letter-by-letter)
+ */
 function brandPronunciationForSpeech(text: string): string {
   return text
     .replace(/\$POCK/gi, "Spock")
     .replace(/\bPOCK\b/gi, "Spock")
-    .replace(/\bKiron\b/gi, "K eye ron");
+    // Undo accidental letter-spaced brands if model emits them
+    .replace(/\bN\s*[\.\- ]\s*E\s*[\.\- ]\s*O\s*[\.\- ]\s*B\s*[\.\- ]\s*A\s*[\.\- ]\s*N\s*[\.\- ]\s*X\b/gi, "Neobanx")
+    .replace(/\bK\s*[\.\- ]\s*I\s*[\.\- ]\s*R\s*[\.\- ]\s*O\s*[\.\- ]\s*N\b/gi, "Kiron");
 }
 
 /** Expand currency/units for TTS so million/billion are never dropped. */

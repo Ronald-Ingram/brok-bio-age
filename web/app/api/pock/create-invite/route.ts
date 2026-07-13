@@ -1,4 +1,8 @@
-import { formatGiftShareMessage, giftClaimRegisterUrl } from "@/lib/giftPockMessage";
+import {
+  formatGiftShareMessage,
+  formatGiftSmsMessage,
+  giftClaimRegisterUrl,
+} from "@/lib/giftPockMessage";
 import {
   generateClaimPassword,
   inviteExpiresAt,
@@ -6,6 +10,7 @@ import {
   normalizePhone,
   signInvite,
 } from "@/lib/pockInvite";
+import { balanceUsdValue, fetchPockMarketQuote } from "@/lib/pockPrice";
 import { absoluteUrl } from "@/lib/siteConfig";
 import { siteOrigin } from "@/lib/stripeServer";
 import { isTwilioConfigured, sendSms } from "@/lib/twilioSms";
@@ -46,10 +51,12 @@ export async function POST(req: Request) {
     const phone = phoneRaw ? normalizePhone(phoneRaw) : "";
     const email = emailRaw;
 
-    if (!phone && !email) {
+    const inviteKindEarly = body.inviteKind === "gift" ? "gift" : "transfer";
+
+    if (!phone && !email && inviteKindEarly !== "gift") {
       return NextResponse.json({ error: "contact_required" }, { status: 400 });
     }
-    if (phone && phone.length < 10 && !email) {
+    if (phone && phone.length < 10 && !email && inviteKindEarly !== "gift") {
       return NextResponse.json({ error: "phone_required" }, { status: 400 });
     }
     if (email && !isValidEmail(email) && !phone) {
@@ -65,8 +72,17 @@ export async function POST(req: Request) {
     const senderId = authData.user.id;
     const inviteKind = body.inviteKind === "gift" ? "gift" : "transfer";
     const recipientName = body.recipientName?.trim();
-    const usdEquivalent = Number(body.usdEquivalent);
     const recipientBrokId = body.recipientBrokId?.trim();
+
+    let giftUsdEquivalent: number | undefined;
+    let giftQuoteSource: "dexscreener" | "retail_anchor" | undefined;
+    let giftUsdPerPock: number | undefined;
+    if (inviteKind === "gift") {
+      const quote = await fetchPockMarketQuote();
+      giftUsdPerPock = quote.usdPerPock;
+      giftQuoteSource = quote.source;
+      giftUsdEquivalent = balanceUsdValue(amount, quote.usdPerPock);
+    }
     const personalMessage = body.personalMessage?.trim();
 
     const { data: senderRow } = await userClient
@@ -105,20 +121,21 @@ export async function POST(req: Request) {
       claimPassword,
       exp: inviteExpiresAt(72),
       recipientName: inviteKind === "gift" ? recipientName : undefined,
-      usdEquivalent:
-        inviteKind === "gift" && Number.isFinite(usdEquivalent)
-          ? usdEquivalent
-          : undefined,
+      usdEquivalent: inviteKind === "gift" ? giftUsdEquivalent : undefined,
       personalMessage: inviteKind === "gift" ? personalMessage : undefined,
       senderName: inviteKind === "gift" ? senderName : undefined,
     });
 
     const contactTail = email
       ? email.split("@")[0]?.slice(0, 6)
-      : phone.slice(-4);
+      : phone
+        ? phone.slice(-4)
+        : "";
+    const giftContact =
+      email || (phone ? `SMS …${contactTail}` : "link shared by sender");
     const note =
       inviteKind === "gift"
-        ? `Gift to ${recipientName} · ${email ? email : `SMS …${contactTail}`}`
+        ? `Gift to ${recipientName} · ${giftContact}`
         : recipientBrokId
           ? `Invite to ${recipientBrokId.slice(0, 8)}… · ${phone ? `SMS …${contactTail}` : email}`
           : `Invite · ${phone ? `SMS …${contactTail}` : email}`;
@@ -137,29 +154,40 @@ export async function POST(req: Request) {
     }
 
     const origin = siteOrigin(req);
-    const claimUrl = `${origin}/claim?token=${encodeURIComponent(token)}`;
-    const registerUrl = giftClaimRegisterUrl(token);
+    const giftUrl = giftClaimRegisterUrl(token);
+    const claimUrl =
+      inviteKind === "gift"
+        ? giftUrl
+        : `${origin}/claim?token=${encodeURIComponent(token)}`;
+    const registerUrl = inviteKind === "gift" ? giftUrl : null;
 
-    const shareMessage =
+    const giftShareInput =
       inviteKind === "gift" && recipientName
-        ? formatGiftShareMessage({
+        ? {
             recipientName,
             amount,
-            usdEquivalent: Number.isFinite(usdEquivalent) ? usdEquivalent : null,
-            claimUrl,
-            claimPassword,
-            registerUrl,
+            usdEquivalent: giftUsdEquivalent ?? null,
+            quoteSource: giftQuoteSource ?? null,
+            giftUrl,
             senderName,
             personalMessage,
-          })
-        : `You received ${amount} $POCK from BROK. Claim: ${claimUrl} Password: ${claimPassword}`;
+          }
+        : null;
+
+    const shareMessage = giftShareInput
+      ? formatGiftShareMessage(giftShareInput)
+      : `You received ${amount} $POCK from BROK. Claim: ${claimUrl} Password: ${claimPassword}`;
+
+    const smsBody = giftShareInput
+      ? formatGiftSmsMessage(giftShareInput)
+      : shareMessage;
 
     const smsHint = shareMessage;
 
     let smsSent = false;
     let smsError: string | null = null;
     if (phone && isTwilioConfigured()) {
-      const smsResult = await sendSms(phoneRaw || phone, smsHint);
+      const smsResult = await sendSms(phoneRaw || phone, smsBody);
       smsSent = smsResult.sent;
       smsError = smsResult.error ?? null;
       if (!smsResult.sent) {
@@ -169,7 +197,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       claimUrl,
-      claimPassword,
+      giftUrl: inviteKind === "gift" ? giftUrl : null,
+      claimPassword: inviteKind === "gift" ? null : claimPassword,
       amount,
       phone: phone || null,
       email: email || null,
@@ -178,7 +207,9 @@ export async function POST(req: Request) {
       expiresInHours: 72,
       inviteKind,
       recipientName: recipientName ?? null,
-      usdEquivalent: Number.isFinite(usdEquivalent) ? usdEquivalent : null,
+      usdEquivalent: inviteKind === "gift" ? (giftUsdEquivalent ?? null) : null,
+      usdPerPockQuote: inviteKind === "gift" ? (giftUsdPerPock ?? null) : null,
+      quoteSource: inviteKind === "gift" ? (giftQuoteSource ?? null) : null,
       registerUrl,
       smsHint,
       shareMessage,

@@ -27,6 +27,8 @@ export function voiceDisplayName(opts: {
 export function chatProviderLabel(provider?: string | null): string {
   if (provider === "brok_api") return BROK_INTELLIGENCE_LABEL;
   if (provider === "groq_fallback") return BROK_INTELLIGENCE_LABEL;
+  if (provider === "brok_backup") return BROK_INTELLIGENCE_LABEL;
+  if (provider === "xai") return BROK_GENIUS_LABEL;
   return BROK_INTELLIGENCE_LABEL;
 }
 

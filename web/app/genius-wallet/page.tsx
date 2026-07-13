@@ -13,16 +13,15 @@ import {
   GENIUS_WALLET_TAGLINE,
   GENIUS_WALLET_TITLE,
 } from "@/lib/geniusWalletCopy";
-import { giftClaimRegisterUrl } from "@/lib/giftPockMessage";
 import { BROK_IN_EVERY_POCKET, NORTH_STAR } from "@/lib/siteCopy";
 import { SITE_URL } from "@/lib/siteConfig";
-import { ArrowRight, CheckCircle2, Coins, Loader2, Sparkles, User } from "lucide-react";
+import { CheckCircle2, Coins, Gift, Loader2, Sparkles, User } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 function GeniusWalletContent() {
-  const { configured, ready, loading, createAccount, refresh } = usePock();
+  const { configured, ready, loading, createAccount, refresh, user } = usePock();
   const searchParams = useSearchParams();
   const claimToken = searchParams.get("claim");
   const purchased = searchParams.get("purchased") === "1";
@@ -146,21 +145,21 @@ function GeniusWalletContent() {
 
       {claimToken && (
         <section className="mt-6 rounded-2xl border border-neon-cyan/30 bg-neon-cyan/8 px-5 py-4 text-sm text-white/75 space-y-2">
-          <p className="font-medium text-neon-cyan">You have a gift to claim</p>
+          <p className="flex items-center gap-2 font-medium text-neon-cyan">
+            <Gift className="h-4 w-4 shrink-0" />
+            You have a gift to claim
+          </p>
           <p>
-            Create your free Genius Wallet account below if needed, then finish
-            claiming with your link.
+            {ready && user
+              ? "Crediting your gift now — check your balance below."
+              : "Create your free Genius Wallet below — your gift credits automatically once your account is ready."}
           </p>
-          <Link
-            href={`/claim?token=${encodeURIComponent(claimToken)}`}
-            className="inline-flex items-center gap-1.5 font-medium text-neon-cyan hover:underline"
-          >
-            Go to claim page
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-          <p className="text-[11px] text-white/40">
-            Register shortcut: {giftClaimRegisterUrl(claimToken)}
-          </p>
+          {!ready && loading && (
+            <p className="flex items-center gap-2 text-xs text-white/45">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Setting up your wallet…
+            </p>
+          )}
         </section>
       )}
 

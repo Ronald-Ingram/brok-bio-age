@@ -1,5 +1,10 @@
+import {
+  mergeSecondaryIntoPrimary,
+  type AccountMergeResult,
+} from "@/lib/accountMerge";
 import { verifyRevealPassword } from "@/lib/accountRevealPassword";
 import { bindDeviceToUser, mintSessionForUserId } from "@/lib/deviceBinding";
+import { resolveBrokAccountId } from "@/lib/resolveBrokAccountId";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -11,16 +16,20 @@ export async function POST(req: Request) {
       deviceId?: string;
       targetUserId?: string;
       password?: string;
-      accessToken?: string;
+      /** Orphan session on this device — balance merged into target after bind */
+      currentUserId?: string;
     };
 
     if (!body.deviceId?.trim() || !body.targetUserId?.trim() || !body.password) {
       return NextResponse.json({ error: "auth_required" }, { status: 400 });
     }
 
-    const targetId = body.targetUserId.trim();
-    const supabase = getServiceSupabase();
+    const targetId = await resolveBrokAccountId(body.targetUserId);
+    if (!targetId) {
+      return NextResponse.json({ error: "account_not_found" }, { status: 404 });
+    }
 
+    const supabase = getServiceSupabase();
     const { data: userRow, error: userErr } = await supabase
       .from("brok_users")
       .select("id, account_reveal_password_hash")
@@ -43,6 +52,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "password_invalid" }, { status: 403 });
     }
 
+    const orphanId = body.currentUserId?.trim();
+    let mergeResult: AccountMergeResult = { merged: false, pockTransferred: 0 };
+    if (orphanId && orphanId !== targetId) {
+      mergeResult = await mergeSecondaryIntoPrimary(targetId, orphanId);
+    }
+
     await bindDeviceToUser(body.deviceId.trim(), targetId);
     const tokens = await mintSessionForUserId(targetId);
 
@@ -51,6 +66,8 @@ export async function POST(req: Request) {
       userId: targetId,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
+      mergedPock: mergeResult.pockTransferred,
+      mergedFrom: mergeResult.secondaryUserId ?? null,
     });
   } catch (e) {
     console.error("bind-account error:", e);

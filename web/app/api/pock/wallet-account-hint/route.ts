@@ -24,9 +24,11 @@ export async function POST(req: Request) {
     }
 
     const id = String(data.id);
+    const accountCode = `BROK-${id.replace(/-/g, "").slice(0, 8).toUpperCase()}`;
     return NextResponse.json({
       found: true,
       accountSuffix: id.replace(/-/g, "").slice(-4).toUpperCase(),
+      accountCode,
       accountMasked: `BROK-••••${id.replace(/-/g, "").slice(-4).toUpperCase()}`,
       pockBalance: Number(data.pock_balance ?? 0),
     });

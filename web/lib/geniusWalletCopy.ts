@@ -23,7 +23,7 @@ export const BUY_POCK_PAYMENT_NOTE =
 export const GENIUS_WALLET_HERO_POINTS = [
   "Human-controlled — you approve every move",
   "Buy $POCK with card or Apple Pay",
-  "Gift to inner circle with one link + password",
+  "Gift to inner circle with one private link",
   "Reserved custody until you connect Solana",
 ] as const;
 
@@ -32,10 +32,13 @@ export const BROK_WALLET_FUTURE_NOTE =
 
 export const GIFT_POCK_HEADLINE = "Gift $POCK";
 export const GIFT_POCK_SUBLINE =
-  "Send Genius Token ($POCK) to inner circle friends and family — one link, one password, no KYC.";
+  "Send Genius Token ($POCK) to inner circle friends and family — one link, no KYC.";
 
 export const GIFT_POCK_CLAIM_EXPLAINER =
-  "Your recipient gets a claim link and password by SMS or email. They register with name and contact only — no KYC — and the gifted $POCK lands in their new Genius Wallet instantly.";
+  "Your recipient opens one private link, creates a free Genius Wallet, and the gift credits automatically — plus 100 $POCK trial if they're new.";
+
+export const GIFT_ONE_LINK_SENDER_TIP =
+  "One link · one gift — send privately. Anyone with the link can claim it.";
 
 export const SUB_WALLET_HEADLINE = "Family sub-wallets";
 export const SUB_WALLET_SUBLINE =

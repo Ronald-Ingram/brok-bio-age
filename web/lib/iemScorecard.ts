@@ -44,13 +44,20 @@ export function formatIemReferenceForPrompt(): string {
   return lines.join("\n");
 }
 
+const DEAL_EVAL_RE =
+  /\b(iem|evaluate|evaluation|review|analyze|analyse|assess|score|decision|deal|proposal|pitch|deck|investment|partnership|cfo|term\s*sheet|due\s*diligence|loan|approve|approval|offer|agreement|memo|high[- ]stakes)\b/i;
+
+const DEAL_FILENAME_RE =
+  /\b(deal|pitch|deck|term[\s_-]?sheet|investment|proposal|memo|due[\s_-]?diligence|iem)\b/i;
+
 export function isDealOrHighStakesEvaluation(
   message: string,
   opts?: { hasFileContext?: boolean; filenames?: string[] }
 ): boolean {
   const corpus = [message, ...(opts?.filenames ?? [])].join("\n");
-  if (opts?.hasFileContext) return true;
-  return /\b(iem|evaluate|evaluation|review|analyze|analyse|assess|score|decision|deal|proposal|pitch|deck|investment|partnership|cfo|term\s*sheet|due\s*diligence|loan|approve|approval|offer|agreement|memo|high[- ]stakes)\b/i.test(
-    corpus
-  );
+  if (DEAL_EVAL_RE.test(corpus)) return true;
+  if (opts?.hasFileContext && opts.filenames?.some((f) => DEAL_FILENAME_RE.test(f))) {
+    return true;
+  }
+  return false;
 }

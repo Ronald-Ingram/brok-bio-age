@@ -54,7 +54,7 @@ const ROUTE_CATALOG: Record<string, { title: string; summary: string }> = {
   "/claim": {
     title: "Claim $POCK Gift",
     summary:
-      "Claim gifted or transferred $POCK with link + password. Simple registration, no KYC. Credits reserved in Genius Wallet.",
+      "Claim gifted $POCK with one private link (auto-credit in Genius Wallet) or transferred $POCK with link + password. Simple registration, no KYC.",
   },
   "/trust": {
     title: "Trust · Security & Compliance",
@@ -77,8 +77,18 @@ export function getRoutePageContext(pathname: string): {
   };
 }
 
+const PAGE_AWARENESS_RE =
+  /\b(this page|on screen|on-screen|what (?:do )?you see|visible|pricing|price|subscribe|subscription|balance|wallet|custody|button|form|result|report|download|pdf|top[- ]?up|buy pock|genius wallet|how much|what does (?:it|this) cost)\b/i;
+
+export function needsPageContext(message: string, pathname?: string): boolean {
+  if (PAGE_AWARENESS_RE.test(message)) return true;
+  const path = pathname?.split("?")[0] ?? "/";
+  if (path !== "/chat" && path !== "/avatar" && message.length < 120) return true;
+  return false;
+}
+
 /** Client-side: extract readable text from the current page (no scripts/styles). */
-export function captureVisiblePageText(maxChars = 6000): string {
+export function captureVisiblePageText(maxChars = 3000): string {
   if (typeof document === "undefined") return "";
 
   const root =
@@ -117,21 +127,39 @@ export function formatSiteCatalogForPrompt(): string {
   return `BROK SITE MAP (all pages on brok.neobanx.com):\n${entries}`;
 }
 
-export function formatPageContextForPrompt(ctx: BrokPageContextPayload): string {
+export function formatPageContextForPrompt(
+  ctx: BrokPageContextPayload,
+  opts?: { compact?: boolean; maxVisibleChars?: number }
+): string {
+  const compact = opts?.compact ?? false;
+  const maxVisible = opts?.maxVisibleChars ?? 3000;
+  const visible = ctx.visible_text?.trim();
+  const visibleTrimmed =
+    visible && visible.length > maxVisible
+      ? `${visible.slice(0, maxVisible)}…`
+      : visible;
+
+  if (compact) {
+    return [
+      "CURRENT BROK PAGE:",
+      `Route: ${ctx.pathname}`,
+      `Page: ${ctx.page_title}`,
+      `Summary: ${ctx.page_summary}`,
+    ].join("\n");
+  }
+
   const lines = [
-    formatSiteCatalogForPrompt(),
-    "",
     "CURRENT BROK WEB PAGE (what the user sees on screen right now):",
     `Route: ${ctx.pathname}`,
     `Page: ${ctx.page_title}`,
     `Summary: ${ctx.page_summary}`,
   ];
-  if (ctx.visible_text?.trim()) {
-    lines.push("", "Visible on-screen text (live snapshot):", ctx.visible_text.trim());
+  if (visibleTrimmed) {
+    lines.push("", "Visible on-screen text (live snapshot):", visibleTrimmed);
   }
   lines.push(
     "",
-    "When the user asks about 'this page', 'what you see', 'on screen', pricing shown, buttons, or UI — answer from the live snapshot first. For other BROK pages, use the site map. Do not invent on-screen numbers or labels not in the snapshot."
+    "When the user asks about 'this page', 'what you see', 'on screen', pricing shown, buttons, or UI — answer from the live snapshot. Do not invent on-screen numbers or labels not in the snapshot."
   );
   return lines.join("\n");
 }

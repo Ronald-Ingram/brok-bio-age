@@ -1,0 +1,499 @@
+/**
+ * Free live market quotes for BROK chat.
+ *
+ * Crypto: CoinGecko free Demo API (no key required; rate-limited).
+ *   https://www.coingecko.com/en/api
+ * Stocks/ETFs: Yahoo Finance public quote endpoint (no key; delayed quotes).
+ *
+ * Attribution: CoinGecko free tier expects attribution in product UI/docs.
+ */
+
+export type MarketQuote = {
+  kind: "crypto" | "stock" | "unknown";
+  query: string;
+  symbol: string;
+  name: string;
+  price: number | null;
+  currency: string;
+  change24hPct?: number | null;
+  marketCap?: number | null;
+  asOf: string;
+  source: string;
+  sourceUrl?: string;
+  note?: string;
+};
+
+const TICKER_RE =
+  /(?:\$|ticker[:\s]+|price\s+of\s+|how\s+(?:much|is)\s+|quote\s+(?:for\s+)?|stock\s+price\s+(?:of\s+)?)\s*([A-Za-z]{1,6})\b/gi;
+const CRYPTO_NAME_RE =
+  /\b(bitcoin|btc|ethereum|eth|solana|sol|dogecoin|doge|ripple|xrp|cardano|ada|avalanche|avax|chainlink|link|polygon|matic|pol|litecoin|ltc|pepe|bonk|wif|jup|jupiter|pock|\$pock)\b/gi;
+const STOCK_NAME_RE =
+  /\b(apple|microsoft|google|alphabet|amazon|nvidia|tesla|meta|facebook|netflix|amd|intel|coinbase|microstrategy|berkshire|jpmorgan|goldman|sp500|s&p\s*500|nasdaq|dow)\b/gi;
+
+/** Map common names/tickers → CoinGecko ids */
+const CRYPTO_IDS: Record<string, string> = {
+  btc: "bitcoin",
+  bitcoin: "bitcoin",
+  eth: "ethereum",
+  ethereum: "ethereum",
+  sol: "solana",
+  solana: "solana",
+  doge: "dogecoin",
+  dogecoin: "dogecoin",
+  xrp: "ripple",
+  ripple: "ripple",
+  ada: "cardano",
+  cardano: "cardano",
+  avax: "avalanche-2",
+  avalanche: "avalanche-2",
+  link: "chainlink",
+  chainlink: "chainlink",
+  matic: "matic-network",
+  polygon: "matic-network",
+  pol: "polygon-ecosystem-token",
+  ltc: "litecoin",
+  litecoin: "litecoin",
+  pepe: "pepe",
+  bonk: "bonk",
+  wif: "dogwifcoin",
+  jup: "jupiter-exchange-solana",
+  jupiter: "jupiter-exchange-solana",
+  // $POCK is a Solana pump.fun style token — try search; no stable CG id guaranteed
+  pock: "pock",
+};
+
+const STOCK_SYMBOLS: Record<string, string> = {
+  apple: "AAPL",
+  aapl: "AAPL",
+  microsoft: "MSFT",
+  msft: "MSFT",
+  google: "GOOGL",
+  alphabet: "GOOGL",
+  googl: "GOOGL",
+  goog: "GOOG",
+  amazon: "AMZN",
+  amzn: "AMZN",
+  nvidia: "NVDA",
+  nvda: "NVDA",
+  tesla: "TSLA",
+  tsla: "TSLA",
+  meta: "META",
+  facebook: "META",
+  netflix: "NFLX",
+  nflx: "NFLX",
+  amd: "AMD",
+  intel: "INTC",
+  intc: "INTC",
+  coinbase: "COIN",
+  coin: "COIN",
+  microstrategy: "MSTR",
+  mstr: "MSTR",
+  berkshire: "BRK-B",
+  jpmorgan: "JPM",
+  jpm: "JPM",
+  goldman: "GS",
+  sp500: "^GSPC",
+  nasdaq: "^IXIC",
+  dow: "^DJI",
+};
+
+const SKIP_TICKERS = new Set([
+  "a",
+  "i",
+  "the",
+  "and",
+  "or",
+  "for",
+  "of",
+  "to",
+  "on",
+  "in",
+  "is",
+  "it",
+  "my",
+  "me",
+  "us",
+  "we",
+  "at",
+  "by",
+  "as",
+  "be",
+  "so",
+  "if",
+  "do",
+  "an",
+  "no",
+  "yes",
+  "long",
+  "form",
+  "tell",
+  "about",
+  "what",
+  "how",
+  "why",
+  "when",
+  "latest",
+  "price",
+  "stock",
+  "crypto",
+  "token",
+  "brok",
+  "pock", // handled via crypto path / founder feed
+]);
+
+export function extractMarketQueries(message: string): {
+  cryptos: string[];
+  stocks: string[];
+} {
+  const cryptos = new Set<string>();
+  const stocks = new Set<string>();
+  const m = message.toLowerCase();
+
+  for (const match of message.matchAll(CRYPTO_NAME_RE)) {
+    const k = match[1]!.toLowerCase().replace("$", "");
+    cryptos.add(k);
+  }
+  for (const match of message.matchAll(STOCK_NAME_RE)) {
+    const k = match[1]!.toLowerCase().replace(/\s+/g, "");
+    const sym = STOCK_SYMBOLS[k];
+    if (sym) stocks.add(sym);
+  }
+
+  // Explicit tickers like $AAPL or "ticker NVDA" or "price of TSLA"
+  let t: RegExpExecArray | null;
+  const re = new RegExp(TICKER_RE.source, "gi");
+  while ((t = re.exec(message)) !== null) {
+    const raw = t[1]!.toUpperCase();
+    const low = raw.toLowerCase();
+    if (SKIP_TICKERS.has(low)) continue;
+    if (CRYPTO_IDS[low]) cryptos.add(low);
+    else if (raw.length <= 5) stocks.add(raw);
+  }
+
+  // Bare tickers: market-ish questions OR short query that is mostly a symbol
+  const marketish =
+    /\b(price|quote|stock|shares?|market|trading|invest|crypto|bitcoin|ticker|how\s+much)\b/i.test(
+      m
+    ) || /^[A-Za-z.\-]{1,6}(\s+[A-Za-z.\-]{1,6}){0,4}$/.test(message.trim());
+  if (marketish) {
+    for (const match of message.matchAll(/\b([A-Za-z]{1,5})\b/g)) {
+      const raw = match[1]!.toUpperCase();
+      const low = raw.toLowerCase();
+      if (SKIP_TICKERS.has(low) || raw.length < 1) continue;
+      if (CRYPTO_IDS[low]) cryptos.add(low);
+      else if (STOCK_SYMBOLS[low]) stocks.add(STOCK_SYMBOLS[low]);
+      else if (raw.length >= 1 && raw.length <= 5) stocks.add(raw);
+    }
+  }
+  // Deduplicate stock symbols
+  const stockList = [...new Set([...stocks])];
+  stocks.clear();
+  for (const s of stockList) stocks.add(s);
+
+  // $POCK always crypto path when mentioned with price/market
+  if (/\b\$?pock\b/i.test(message) && /\b(price|worth|market|trade|jupiter)\b/i.test(m)) {
+    cryptos.add("pock");
+  }
+
+  return {
+    cryptos: [...cryptos].slice(0, 6),
+    stocks: [...stocks].slice(0, 6),
+  };
+}
+
+export function wantsMarketPrices(message: string): boolean {
+  const { cryptos, stocks } = extractMarketQueries(message);
+  if (cryptos.length || stocks.length) return true;
+  return /\b(price|quote|how\s+much\s+is|market\s+cap|trading\s+at|share\s+price|spot\s+price)\b/i.test(
+    message
+  );
+}
+
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+async function fetchJson(url: string, timeoutMs = 10_000): Promise<unknown> {
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": BROWSER_UA,
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`http_${res.status}`);
+  return res.json();
+}
+
+async function fetchText(url: string, timeoutMs = 15_000): Promise<string> {
+  const res = await fetch(url, {
+    headers: {
+      Accept: "text/plain,text/html,*/*",
+      "User-Agent": BROWSER_UA,
+    },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`http_${res.status}`);
+  return res.text();
+}
+
+/** Parse plausible USD equity prices from scraped markdown/HTML. */
+function parseUsdPricesFromText(text: string): number[] {
+  const out: number[] = [];
+  for (const m of text.matchAll(/\$([\d,]+\.\d{2})\b/g)) {
+    const n = Number(m[1]!.replace(/,/g, ""));
+    if (Number.isFinite(n) && n >= 0.5 && n < 500_000) out.push(n);
+  }
+  return out;
+}
+
+function pickEquityPrice(candidates: number[]): number | null {
+  if (!candidates.length) return null;
+  // Prefer typical large-cap range; avoid tiny UI prices ($1, $10) when better options exist.
+  const mid = candidates.filter((p) => p >= 5 && p <= 50_000);
+  if (mid.length) return mid[0]!;
+  return candidates[0]!;
+}
+
+async function quoteCrypto(query: string): Promise<MarketQuote> {
+  const key = query.toLowerCase().replace("$", "");
+  let id = CRYPTO_IDS[key];
+
+  // $POCK / unknown: search CoinGecko
+  if (!id || id === "pock") {
+    try {
+      const search = (await fetchJson(
+        `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(query)}`
+      )) as {
+        coins?: { id: string; symbol: string; name: string }[];
+      };
+      const coins = search.coins ?? [];
+      // Prefer Solana / pump-style or exact symbol pock
+      const hit =
+        coins.find((c) => c.symbol.toLowerCase() === "pock") ||
+        coins.find((c) => c.symbol.toLowerCase() === key) ||
+        coins[0];
+      if (hit) id = hit.id;
+    } catch {
+      /* fall through */
+    }
+  }
+
+  if (!id || id === "pock") {
+    return {
+      kind: "crypto",
+      query,
+      symbol: key.toUpperCase(),
+      name: query,
+      price: null,
+      currency: "USD",
+      asOf: new Date().toISOString(),
+      source: "CoinGecko",
+      sourceUrl: "https://www.coingecko.com",
+      note:
+        key === "pock"
+          ? "No stable CoinGecko listing id for $POCK yet — check Jupiter / DexScreener and founder X for mint 76r29NpnRW8PAxpnSnVBFcZPUcukgvno1Kkiysg8pump"
+          : "Coin not found on CoinGecko free search",
+    };
+  }
+
+  try {
+    const data = (await fetchJson(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(id)}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true`
+    )) as Record<
+      string,
+      { usd?: number; usd_24h_change?: number; usd_market_cap?: number }
+    >;
+    const row = data[id];
+    return {
+      kind: "crypto",
+      query,
+      symbol: key.toUpperCase(),
+      name: id,
+      price: row?.usd ?? null,
+      currency: "USD",
+      change24hPct: row?.usd_24h_change ?? null,
+      marketCap: row?.usd_market_cap ?? null,
+      asOf: new Date().toISOString(),
+      source: "CoinGecko (free)",
+      sourceUrl: `https://www.coingecko.com/en/coins/${id}`,
+    };
+  } catch (e) {
+    return {
+      kind: "crypto",
+      query,
+      symbol: key.toUpperCase(),
+      name: id,
+      price: null,
+      currency: "USD",
+      asOf: new Date().toISOString(),
+      source: "CoinGecko",
+      note: e instanceof Error ? e.message : "fetch_failed",
+    };
+  }
+}
+
+async function quoteStockYahoo(sym: string): Promise<MarketQuote | null> {
+  try {
+    // Try query1 then query2; Vercel often gets 429 — fail soft.
+    for (const host of ["query1", "query2"] as const) {
+      try {
+        const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?interval=1d&range=5d`;
+        const data = (await fetchJson(url, 8_000)) as {
+          chart?: {
+            result?: {
+              meta?: {
+                regularMarketPrice?: number;
+                chartPreviousClose?: number;
+                previousClose?: number;
+                currency?: string;
+                shortName?: string;
+                longName?: string;
+                symbol?: string;
+              };
+            }[];
+          };
+        };
+        const meta = data.chart?.result?.[0]?.meta;
+        if (!meta?.regularMarketPrice) continue;
+        const prev = meta.chartPreviousClose ?? meta.previousClose;
+        const price = meta.regularMarketPrice;
+        const change24hPct =
+          prev && prev > 0 ? ((price - prev) / prev) * 100 : null;
+        return {
+          kind: "stock",
+          query: sym,
+          symbol: meta.symbol ?? sym,
+          name: meta.shortName || meta.longName || sym,
+          price,
+          currency: meta.currency || "USD",
+          change24hPct,
+          asOf: new Date().toISOString(),
+          source: "yahoo",
+        };
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    /* fall through */
+  }
+  return null;
+}
+
+/** Free scrape fallback when Yahoo rate-limits serverless IPs. */
+async function quoteStockScrape(sym: string): Promise<MarketQuote | null> {
+  const urls = [
+    `https://r.jina.ai/https://www.google.com/finance/quote/${encodeURIComponent(sym)}:NASDAQ`,
+    `https://r.jina.ai/https://www.google.com/finance/quote/${encodeURIComponent(sym)}:NYSE`,
+    `https://r.jina.ai/https://www.marketwatch.com/investing/stock/${encodeURIComponent(sym.toLowerCase())}`,
+  ];
+  for (const url of urls) {
+    try {
+      const text = await fetchText(url, 18_000);
+      const prices = parseUsdPricesFromText(text);
+      const price = pickEquityPrice(prices);
+      if (price == null) continue;
+      // Optional day change: look for +1.23% or -0.45% near start of page
+      let change24hPct: number | null = null;
+      const ch = text.match(/([+\-][\d]+\.[\d]+)\s*%/);
+      if (ch) change24hPct = Number(ch[1]);
+      return {
+        kind: "stock",
+        query: sym,
+        symbol: sym,
+        name: sym,
+        price,
+        currency: "USD",
+        change24hPct,
+        asOf: new Date().toISOString(),
+        source: "market_scrape",
+      };
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+async function quoteStock(symbol: string): Promise<MarketQuote> {
+  const sym = symbol.toUpperCase();
+  const yahoo = await quoteStockYahoo(sym);
+  if (yahoo?.price != null) return yahoo;
+  const scraped = await quoteStockScrape(sym);
+  if (scraped?.price != null) return scraped;
+  return {
+    kind: "stock",
+    query: sym,
+    symbol: sym,
+    name: sym,
+    price: null,
+    currency: "USD",
+    asOf: new Date().toISOString(),
+    source: "unavailable",
+    note: "Quote temporarily unavailable",
+  };
+}
+
+export async function fetchMarketQuotes(message: string): Promise<MarketQuote[]> {
+  const { cryptos, stocks } = extractMarketQueries(message);
+  const out: MarketQuote[] = [];
+
+  await Promise.all([
+    ...cryptos.map(async (c) => {
+      out.push(await quoteCrypto(c));
+    }),
+    ...stocks.map(async (s) => {
+      out.push(await quoteStock(s));
+    }),
+  ]);
+
+  return out;
+}
+
+export function formatMarketQuotesBlock(quotes: MarketQuote[]): string {
+  const usable = quotes.filter((q) => q.price != null);
+  if (!usable.length) return "";
+  const lines = usable.map((q) => {
+    const px =
+      q.price != null
+        ? `${q.currency} ${q.price.toLocaleString(undefined, {
+            maximumFractionDigits: q.price < 1 ? 8 : 2,
+          })}`
+        : "unavailable";
+    const ch =
+      q.change24hPct != null
+        ? ` (${q.change24hPct >= 0 ? "+" : ""}${q.change24hPct.toFixed(2)}%)`
+        : "";
+    const mc =
+      q.marketCap != null
+        ? ` · market cap ~$${Math.round(q.marketCap).toLocaleString()}`
+        : "";
+    // No source names or URLs in the block — user-facing answers must not cite vendors/links for prices.
+    return `• ${q.kind === "crypto" ? "Crypto" : "Stock"} ${q.symbol}: ${px}${ch}${mc}`;
+  });
+
+  return `LIVE MARKET QUOTES (fetched just now — use these numbers; do not invent prices):
+${lines.join("\n")}
+
+RESPONSE RULES FOR PRICES:
+- State the price and optional % change only.
+- Do NOT name data vendors, APIs, or paste any source links for stock/crypto prices.
+- Not financial advice / DYOR is fine.
+- For $POCK if price unavailable: say so briefly; founder feed may still help for narrative.`;
+}
+
+export async function buildMarketPricesKnowledgeBlock(
+  message: string
+): Promise<string | null> {
+  if (!wantsMarketPrices(message) && !extractMarketQueries(message).cryptos.length) {
+    // Still try if message clearly asks price of something
+    if (!/\b(price|quote|worth|trading\s+at)\b/i.test(message)) return null;
+  }
+  try {
+    const quotes = await fetchMarketQuotes(message);
+    if (!quotes.length) return null;
+    return formatMarketQuotesBlock(quotes);
+  } catch {
+    return null;
+  }
+}

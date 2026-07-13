@@ -69,6 +69,7 @@ export function CustodyStatusPanel() {
   );
   const [walletHint, setWalletHint] = useState<{
     accountSuffix?: string;
+    accountCode?: string;
   } | null>(null);
   const [releaseAmount, setReleaseAmount] = useState("");
   const [destOverride, setDestOverride] = useState("");
@@ -164,8 +165,12 @@ export function CustodyStatusPanel() {
           body: JSON.stringify({ walletAddress: address.trim() }),
         })
           .then((r) => r.json())
-          .then((d: { found?: boolean; accountSuffix?: string }) => {
-            if (d.found) setWalletHint({ accountSuffix: d.accountSuffix });
+          .then((d: { found?: boolean; accountSuffix?: string; accountCode?: string }) => {
+            if (d.found)
+              setWalletHint({
+                accountSuffix: d.accountSuffix,
+                accountCode: d.accountCode,
+              });
           })
           .catch(() => null);
       } else if (msg === "wallet_address_invalid") {
@@ -479,6 +484,7 @@ export function CustodyStatusPanel() {
         <AccountRestorePanel
           walletAddress={address.trim() || user.solana_wallet_address || undefined}
           accountSuffixHint={walletHint?.accountSuffix}
+          accountCodeHint={walletHint?.accountCode}
         />
       )}
 

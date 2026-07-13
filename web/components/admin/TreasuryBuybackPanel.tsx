@@ -1,6 +1,7 @@
 "use client";
 
 import { ExternalLink, Loader2, RefreshCw, Settings2, Zap } from "lucide-react";
+import { adminAuthHeaders } from "@/lib/adminAuthClient";
 import { useCallback, useEffect, useState } from "react";
 
 interface BuybackApiData {
@@ -41,10 +42,10 @@ interface BuybackApiData {
 }
 
 interface TreasuryBuybackPanelProps {
-  adminSecret: string;
+  adminSession: string;
 }
 
-export function TreasuryBuybackPanel({ adminSecret }: TreasuryBuybackPanelProps) {
+export function TreasuryBuybackPanel({ adminSession }: TreasuryBuybackPanelProps) {
   const [data, setData] = useState<BuybackApiData | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -60,11 +61,11 @@ export function TreasuryBuybackPanel({ adminSecret }: TreasuryBuybackPanelProps)
 
   const headers = {
     "Content-Type": "application/json",
-    "x-brok-og-admin": adminSecret,
+    ...adminAuthHeaders({ session: adminSession }),
   };
 
   const load = useCallback(async () => {
-    if (!adminSecret.trim()) return;
+    if (!adminSession.trim()) return;
     setLoading(true);
     setError(null);
     try {
@@ -81,7 +82,7 @@ export function TreasuryBuybackPanel({ adminSecret }: TreasuryBuybackPanelProps)
     } finally {
       setLoading(false);
     }
-  }, [adminSecret]);
+  }, [adminSession]);
 
   useEffect(() => {
     load();
@@ -149,7 +150,7 @@ export function TreasuryBuybackPanel({ adminSecret }: TreasuryBuybackPanelProps)
     }
   };
 
-  if (!adminSecret.trim()) return null;
+  if (!adminSession.trim()) return null;
 
   return (
     <section className="rounded-xl border border-violet-400/25 bg-gradient-to-b from-violet-500/8 to-bg-card p-4 space-y-4">

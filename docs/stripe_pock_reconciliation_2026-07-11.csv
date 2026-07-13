@@ -1,0 +1,20 @@
+type,session_id,amount_usd,pock_or_tier,stripe_created_utc,wallet_credit_utc,purchase_to_wallet_sec,notes
+card_topup,cs_live_a1ITUzeOy1I6EaUE,50.0,17850,2026-07-09T06:17:23,2026-07-09T06:17:55,32.0,reserved custody in Genius Wallet
+card_topup,cs_live_a1qKCwSDC47FyVW4,9.99,3698,2026-07-09T07:41:12,2026-07-09T07:42:42,91.0,reserved custody in Genius Wallet
+card_topup,cs_live_a1fS7fmD06PZXbvs,9.99,3535,2026-07-09T12:25:03,2026-07-09T12:37:07,724.3,reserved custody in Genius Wallet
+card_topup,cs_live_a1dUG1oaHxepYa03,5.0,1724,2026-07-09T16:56:24,2026-07-09T16:57:04,40.3,reserved custody in Genius Wallet
+card_topup,cs_live_a1h0NYHC3PM9nk0d,9.99,3448,2026-07-09T20:08:44,2026-07-09T20:11:03,139.4,reserved custody in Genius Wallet
+card_topup,cs_live_a1GAfCgAmTfh9qXr,19.99,6900,2026-07-09T20:17:27,2026-07-09T20:18:58,91.8,reserved custody in Genius Wallet
+card_topup,cs_live_a161hSeGB8HWB2B8,19.99,6841,2026-07-09T20:34:18,2026-07-09T20:35:33,76.0,reserved custody in Genius Wallet
+card_topup,cs_live_a15DEkCxLptQkmpG,9.99,3369,2026-07-09T23:48:47,2026-07-09T23:49:32,45.6,reserved custody in Genius Wallet
+card_topup,cs_live_a1YgcjggtJHCJU3P,50.0,16458,2026-07-10T03:28:04,2026-07-10T03:28:23,19.5,reserved custody in Genius Wallet
+card_topup,cs_live_a1Mg5v8NBLEus6wv,9.99,3552,2026-07-10T14:19:08,2026-07-10T14:25:37,389.3,reserved custody in Genius Wallet
+card_topup,cs_live_a13VUNh4cxr5snB2,50.0,19319,2026-07-11T07:13:56,2026-07-11T07:15:01,65.2,reserved custody in Genius Wallet
+card_topup,cs_live_a1ZQeP6K5RmvNjcK,50.0,19770,2026-07-11T07:17:05,2026-07-11T07:17:18,13.2,reserved custody in Genius Wallet
+subscription,cs_live_a17dEg0zQ7rCSxho,5.0,essential,2026-07-06T16:47:42,2026-07-06T16:48:10,,included POCK via subscription_credit
+subscription,cs_live_a1dKlATHEjIQBDMX,5.0,essential,2026-07-06T16:05:31,2026-07-09T16:51:57,,included POCK via subscription_credit
+subscription,cs_live_a12oGpA7I4MLWN4R,5.0,essential,2026-07-06T16:18:42,2026-07-09T16:51:56,,included POCK via subscription_credit
+subscription,cs_live_a1eBZsgceBgkjcWU,9.0,essential,2026-07-09T17:18:29,2026-07-09T17:19:10,,included POCK via subscription_credit
+subscription,cs_live_a19ZIgr1fhGiW8R9,9.0,essential,2026-07-09T18:46:57,2026-07-09T18:50:00,,included POCK via subscription_credit
+subscription,cs_live_a1iv1o0hL3ijoiV3,49.0,premium,2026-07-10T16:27:09,2026-07-10T16:29:19,,included POCK via subscription_credit
+subscription,cs_live_a1rRMSSTCIpYfLIu,49.0,premium,2026-07-11T07:08:59,2026-07-11T07:10:21,,included POCK via subscription_credit

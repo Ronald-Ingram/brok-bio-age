@@ -27,13 +27,17 @@ import {
 import { FREE_TIER_COPY } from "@/lib/freeReport";
 import type { PockInviteResult } from "@/lib/pockService";
 import { totalSpendablePock } from "@/lib/pockService";
+import { usePockMarketQuote } from "@/hooks/usePockMarketQuote";
+import { balanceUsdValue } from "@/lib/pockPrice";
 import {
   formatUsd,
-  pockToUsd,
   usdToPock,
 } from "@/lib/purchaseConfig";
 import { IMPACT_OPTIONS, PREMIUM_FEATURES } from "@/lib/pockTypes";
 import { DigitalAssetDisclaimer } from "@/components/DigitalAssetDisclaimer";
+import { GiftOneLinkTip } from "@/components/GiftOneLinkTip";
+import { GiftShareActions } from "@/components/GiftShareActions";
+import { formatGiftSmsMessage } from "@/lib/giftPockMessage";
 import { motion } from "framer-motion";
 import {
   Coins,
@@ -92,9 +96,19 @@ export function WalletPanel({
   );
   const [impactId, setImpactId] = useState<string>(IMPACT_OPTIONS[0].id);
   const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [giftError, setGiftError] = useState<string | null>(null);
   const [pendingClaimUrl, setPendingClaimUrl] = useState<string | null>(null);
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const { usdPerPock, quoteLabel, loading: quoteLoading } = usePockMarketQuote();
+
+  useEffect(() => {
+    const n = parseInt(amount, 10);
+    if (panel === "gift" && Number.isFinite(n) && n > 0) {
+      setUsdAmount(balanceUsdValue(n, usdPerPock).toFixed(2));
+    }
+  }, [usdPerPock, amount, panel]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -175,6 +189,8 @@ export function WalletPanel({
   const resetForm = () => {
     setPanel(null);
     setConfirming(false);
+    setSubmitting(false);
+    setGiftError(null);
     setRecipient("");
     setPhone("");
     setRecipientWallet("");
@@ -193,7 +209,7 @@ export function WalletPanel({
     setAmount(pockStr);
     const n = parseInt(pockStr, 10);
     if (Number.isFinite(n) && n > 0) {
-      setUsdAmount(pockToUsd(n).toFixed(2));
+      setUsdAmount(balanceUsdValue(n, usdPerPock).toFixed(2));
     }
   };
 
@@ -201,12 +217,13 @@ export function WalletPanel({
     setUsdAmount(usdStr);
     const n = parseFloat(usdStr);
     if (Number.isFinite(n) && n > 0) {
-      setAmount(String(usdToPock(n)));
+      setAmount(String(usdToPock(n, usdPerPock)));
     }
   };
 
   const handleConfirm = async () => {
-    setConfirming(true);
+    setSubmitting(true);
+    setGiftError(null);
     const n = parseInt(amount, 10);
     try {
       if (panel === "send") {
@@ -222,9 +239,9 @@ export function WalletPanel({
       } else if (panel === "gift") {
         const result = await sendGiftInvite({
           amount: n,
-          usdEquivalent: parseFloat(usdAmount) || pockToUsd(n),
+          usdEquivalent: parseFloat(usdAmount) || balanceUsdValue(n, usdPerPock),
           recipientName: giftName.trim(),
-          phone: giftPhone.trim(),
+          phone: giftPhone.trim() || undefined,
           recipientBrokId: giftRecipientId.trim() || undefined,
         });
         setInviteResult(result);
@@ -237,8 +254,19 @@ export function WalletPanel({
         donate(cause, n);
       }
       resetForm();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "action_failed";
+      if (panel === "gift") {
+        const friendly: Record<string, string> = {
+          insufficient_pock: "Not enough $POCK for this gift.",
+          recipient_name_required: "Enter the recipient's name.",
+          invite_failed: "Could not create gift — try again.",
+          auth_required: "Session expired — refresh the page.",
+        };
+        setGiftError(friendly[msg] ?? "Could not send gift — try again.");
+      }
     } finally {
-      setConfirming(false);
+      setSubmitting(false);
     }
   };
 
@@ -303,9 +331,8 @@ export function WalletPanel({
         </div>
       </motion.section>
 
-      {user.pock_balance <= 100 && user.trial_credited && (
-        <AccountRestorePanel />
-      )}
+      {/* Always first: fix Mac vs phone split accounts */}
+      <AccountRestorePanel defaultOpen />
 
       <NeoWalletProductsPanel featured={isGenius} />
 
@@ -562,14 +589,14 @@ export function WalletPanel({
 
           {panel === "gift" && (
             <>
-              <h3 className="text-sm font-medium text-white/70">
+              <h3 className="text-sm font-medium text-white/70 flex items-center gap-1.5">
                 Gift credits
+                <GiftOneLinkTip variant="tip" />
               </h3>
               <p className="text-xs text-white/40 leading-relaxed">
-                Send $POCK as a gift. If you have sufficient balance, the
-                recipient gets an SMS-friendly claim link. They enter their BROK
-                ID to credit instantly — or register free via the link in the
-                message if they don&apos;t have an ID yet.
+                Send $POCK as a gift. Your recipient gets one private link — they
+                open it, create a free Genius Wallet, and the gift credits
+                automatically.
               </p>
               <label className="block space-y-1.5">
                 <span className="text-xs text-white/45 uppercase tracking-wide">
@@ -585,11 +612,11 @@ export function WalletPanel({
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs text-white/45 uppercase tracking-wide">
-                  Mobile phone (required)
+                  Mobile phone (optional — pre-fills Text message)
                 </span>
                 <input
                   type="tel"
-                  placeholder="+1 555 123 4567"
+                  placeholder="Optional — for one-tap Text after gift is created"
                   value={giftPhone}
                   onChange={(e) => setGiftPhone(e.target.value)}
                   className="bio-field__control w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none"
@@ -636,12 +663,14 @@ export function WalletPanel({
                 </label>
               </div>
               <p className="text-[11px] text-white/35">
-                Retail anchor {formatUsd(pockToUsd(1))} per $POCK · spendable
+                Delayed {quoteLabel} quote{" "}
+                {quoteLoading ? "…" : formatUsd(usdPerPock)}/$POCK · spendable
                 balance {spendable} $POCK
               </p>
               <DigitalAssetDisclaimer compact />
               {inviteResult?.inviteKind === "gift" && (
                 <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/5 p-3 space-y-2 text-xs text-white/70">
+                  <GiftOneLinkTip />
                   <p className="font-medium text-emerald-400/90">
                     {inviteResult.smsSent
                       ? `Gift SMS sent to ${inviteResult.recipientName}`
@@ -654,34 +683,49 @@ export function WalletPanel({
                     </p>
                   )}
                   <p>
-                    <span className="text-white/45">Claim link:</span>{" "}
+                    <span className="text-white/45">Gift link:</span>{" "}
                     <a
-                      href={inviteResult.claimUrl}
+                      href={
+                        inviteResult.giftUrl ??
+                        inviteResult.registerUrl ??
+                        inviteResult.claimUrl
+                      }
                       className="text-neon-cyan break-all hover:underline"
                     >
-                      {inviteResult.claimUrl}
+                      {inviteResult.giftUrl ??
+                        inviteResult.registerUrl ??
+                        inviteResult.claimUrl}
                     </a>
                   </p>
-                  <p>
-                    <span className="text-white/45">8-digit password:</span>{" "}
-                    <span className="font-mono text-neon-cyan">
-                      {inviteResult.claimPassword}
-                    </span>
-                  </p>
-                  {inviteResult.registerUrl && (
-                    <p>
-                      <span className="text-white/45">Register link:</span>{" "}
-                      <a
-                        href={inviteResult.registerUrl}
-                        className="text-neon-cyan break-all hover:underline"
-                      >
-                        {inviteResult.registerUrl}
-                      </a>
-                    </p>
-                  )}
                   <p className="text-white/45 whitespace-pre-wrap">
                     {inviteResult.smsHint}
                   </p>
+                  {inviteResult.shareMessage && (
+                    <GiftShareActions
+                      compact
+                      shareText={inviteResult.shareMessage}
+                      smsText={formatGiftSmsMessage({
+                        recipientName: inviteResult.recipientName ?? giftName,
+                        amount: inviteResult.amount,
+                        usdEquivalent: inviteResult.usdEquivalent,
+                        quoteSource: inviteResult.quoteSource ?? null,
+                        giftUrl:
+                          inviteResult.giftUrl ??
+                          inviteResult.registerUrl ??
+                          inviteResult.claimUrl,
+                        senderName: inviteResult.senderName ?? undefined,
+                        personalMessage: inviteResult.personalMessage ?? undefined,
+                      })}
+                      giftUrl={
+                        inviteResult.giftUrl ??
+                        inviteResult.registerUrl ??
+                        inviteResult.claimUrl
+                      }
+                      recipientName={inviteResult.recipientName ?? giftName}
+                      phone={giftPhone.trim() || inviteResult.phone}
+                      email={inviteResult.email}
+                    />
+                  )}
                 </div>
               )}
             </>
@@ -755,10 +799,10 @@ export function WalletPanel({
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  disabled={confirming}
+                  disabled={submitting}
                   className="px-6 py-2.5 rounded-xl bg-neon-cyan/20 border border-neon-cyan/60 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors"
                 >
-                  {confirming ? (
+                  {submitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     "Confirm"
@@ -779,8 +823,7 @@ export function WalletPanel({
                     !amount ||
                     parseInt(amount, 10) < 1 ||
                     parseInt(amount, 10) > spendable ||
-                    giftName.trim().length < 2 ||
-                    giftPhone.replace(/\D/g, "").length < 10
+                    giftName.trim().length < 2
                   }
                   className="px-6 py-2.5 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-40 transition-colors"
                 >
@@ -798,10 +841,10 @@ export function WalletPanel({
                   <button
                     type="button"
                     onClick={handleConfirm}
-                    disabled={confirming}
+                    disabled={submitting}
                     className="px-6 py-2.5 rounded-xl bg-neon-cyan/20 border border-neon-cyan/60 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors"
                   >
-                    {confirming ? (
+                    {submitting ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       "Send gift"
@@ -812,14 +855,22 @@ export function WalletPanel({
             </div>
           )}
 
+          {giftError && panel === "gift" && (
+            <p className="text-sm text-red-400/90 border border-red-400/20 rounded-lg px-3 py-2 bg-red-400/5">
+              {giftError}
+            </p>
+          )}
+
           {confirming && (
             <p className="text-xs text-amber-400/80 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
               {panel === "gift" ? (
                 <>
                   You&apos;re gifting {amount} $POCK
-                  {usdAmount ? ` (${formatUsd(parseFloat(usdAmount) || pockToUsd(parseInt(amount, 10)))} USD)` : ""}{" "}
-                  to {giftName.trim()}. Balance updates immediately; share the
-                  claim link via SMS.
+                  {usdAmount
+                    ? ` (${formatUsd(parseFloat(usdAmount) || balanceUsdValue(parseInt(amount, 10), usdPerPock))} USD)`
+                    : ""}{" "}
+                  to {giftName.trim()}. Balance updates immediately; then tap
+                  Text message to send from your phone.
                 </>
               ) : (
                 <>

@@ -68,7 +68,7 @@ export const BROK_FAQ_ITEMS: BrokFaqItem[] = [
     id: "faq_family_subwallets",
     question: "Can I give family members their own wallets?",
     answer:
-      "Yes — create named family sub-wallets under your Genius Wallet. You fund and reclaim $POCK; they spend within the balance you allocate. Sub-wallets are controlled pockets, not separate anonymous accounts. For gifts to adults, use Gift $POCK (link + password).",
+      "Yes — create named family sub-wallets under your Genius Wallet. You fund and reclaim $POCK; they spend within the balance you allocate. Sub-wallets are controlled pockets, not separate anonymous accounts. For gifts to adults, use Gift $POCK (one private link).",
     tags: ["family", "sub-wallets"],
   },
   {
@@ -93,11 +93,39 @@ export const BROK_FAQ_ITEMS: BrokFaqItem[] = [
     tags: ["security", "self-custody"],
   },
   {
-    id: "faq_multiple_device_accounts",
-    question: "Why do I have multiple BROK accounts or can't link my wallet?",
+    id: "faq_device_pin",
+    question: "What is a Device PIN?",
     answer:
-      "Each browser/device creates its own BROK account automatically (device sign-in). Your card purchase and Solana wallet may be on a different account than the one you're viewing now. Use Restore your main account on Genius Wallet — prove ownership with your Stripe checkout session ID (cs_live_…) or reveal password — to bind this device to your main account. Linking a wallet already on another account shows wallet already linked until you restore the correct account.",
-    tags: ["account", "device", "custody"],
+      "A Device PIN is 4–8 digits that protect one Genius Wallet account. It is not your Apple password, Face ID, or iCloud Keychain login.\n\n• One PIN per account (not per phone).\n• Change it once on any device → every device uses the new PIN.\n• Use it only with Switch account to open that wallet.\n• Set or change PIN under the account code (Set PIN / Change PIN). Digits only — no biometrics required.",
+    tags: ["account", "pin", "security", "device"],
+  },
+  {
+    id: "faq_link_device",
+    question: "How do I use the same wallet on phone and Mac?",
+    answer:
+      "Simple model: one account code (BROK-XXXXXXXX) + one Device PIN + every device.\n\n1) On the wallet with your real balance: Copy the account code → Set PIN (4–8 digits).\n2) On other devices: Genius Wallet → Switch account → paste that code + PIN → Open.\n\nEach browser shows one wallet at a time. Opening the right account binds this device and can merge leftover trial $POCK into it. Family sub-wallets are allowances inside that parent account, not separate logins.",
+    tags: ["account", "device", "mobile", "link", "sync", "switch", "pin"],
+  },
+  {
+    id: "faq_multiple_device_accounts",
+    question: "Why does Mac show a different balance than my phone?",
+    answer:
+      "Each new browser can open a temporary trial wallet. Your purchases stay on the account where you paid — money is not deleted.\n\nFix: Switch account → enter the full-balance BROK- code + that account’s Device PIN. Leftover trial balance may merge in (e.g. two wallets combine into one total). After that, phone and Mac should match.",
+    tags: ["account", "device", "custody", "balance", "merge"],
+  },
+  {
+    id: "faq_link_device_troubleshoot",
+    question: "Account switch troubleshooting",
+    answer:
+      "• Account not found — use BROK- code only (Copy button), no spaces, not a Stripe receipt.\n• Wrong PIN — use the PIN for the account you are opening; one account → one PIN on all devices.\n• Only one wallet on screen — by design; use Switch account to open another.\n• Apple Password popup — Device PIN is digits only, not your Apple password; hard-refresh if an old form still appears.\n• Forgot PIN — email info@neobanx.com with your BROK- code for recovery.\n• Family pockets — under Genius family sub-wallets on the parent account.",
+    tags: ["account", "device", "mobile", "support", "pin"],
+  },
+  {
+    id: "faq_balance_after_merge",
+    question: "Why did my balance jump after Switch account?",
+    answer:
+      "When you open your main account from a temporary trial wallet, leftover $POCK on that trial can merge into the main balance. The new total should match main + what was on the temporary wallet (ledger shows a merge / transfer). Transaction history follows the main account.",
+    tags: ["account", "balance", "merge", "ledger"],
   },
   {
     id: "faq_contact_brok",
@@ -131,6 +159,29 @@ export function formatAllFaqForPrompt(maxItems = 12): string {
   return items
     .map((f) => `Q: ${f.question}\nA: ${f.answer}`)
     .join("\n\n");
+}
+
+/** Keyword-matched FAQ subset — avoids dumping all FAQs into every Groq call. */
+export function formatMatchedFaqForPrompt(
+  question: string,
+  maxItems = 3
+): string | undefined {
+  const keywords = question
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((w) => w.length > 3);
+
+  const scored = BROK_FAQ_ITEMS.map((item) => {
+    const hay = `${item.question} ${item.answer} ${(item.tags ?? []).join(" ")}`.toLowerCase();
+    const hits = keywords.filter((k) => hay.includes(k)).length;
+    return { item, hits };
+  })
+    .filter((r) => r.hits > 0)
+    .sort((a, b) => b.hits - a.hits)
+    .slice(0, maxItems);
+
+  if (!scored.length) return undefined;
+  return scored.map((r) => `Q: ${r.item.question}\nA: ${r.item.answer}`).join("\n\n");
 }
 
 export function canonTagsForFaq(item: BrokFaqItem): string {

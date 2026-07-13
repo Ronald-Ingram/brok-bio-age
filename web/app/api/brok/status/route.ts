@@ -20,6 +20,10 @@ import {
   modelRouteLabel,
   voiceDisplayName,
 } from "@/lib/brokProductLabels";
+import {
+  anyChatBackendConfigured,
+  chatFailoverSummary,
+} from "@/lib/brokChatFailover";
 import { groqChatConfigured } from "@/lib/brokChatGroq";
 import { DEFAULT_LLM_PROVIDER, MODEL_ROUTING } from "@/lib/modelRouterConfig";
 import {
@@ -46,6 +50,8 @@ export async function GET() {
   }
 
   const groqFallback = groqChatConfigured();
+  const failover = chatFailoverSummary();
+  const chatBackendsReady = anyChatBackendConfigured();
   const cartesiaVoice = cartesiaConfigured() ? await fetchCartesiaVoiceInfo() : null;
   const activeProvider = resolvedVoiceProvider();
   const voiceProvider =
@@ -65,16 +71,24 @@ export async function GET() {
     ? "brok_api"
     : groqFallback
       ? "groq_fallback"
-      : null;
+      : failover.backups.length > 0
+        ? "brok_backup"
+        : null;
 
   return NextResponse.json({
     brokApi: brokApiConfigured(),
     brokApiUrl: BROK_API_BASE || null,
     brokHealth,
-    chatReady: brokApiConfigured() || groqFallback,
+    chatReady: brokApiConfigured() || chatBackendsReady,
     chatProvider,
     chatProviderLabel: chatProviderLabel(chatProvider),
     groqFallback,
+    chatFailover: {
+      backups: failover.backups,
+      chain: failover.chain,
+      backupCount: failover.backups.length,
+      topicOverride: failover.topicOverride,
+    },
     cartesia: cartesiaConfigured(),
     cartesiaVoice,
     voiceProvider,

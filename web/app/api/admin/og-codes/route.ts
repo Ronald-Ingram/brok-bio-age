@@ -1,15 +1,9 @@
+import { assertAdmin } from "@/lib/adminAuth";
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 
 export const runtime = "nodejs";
-
-function assertAdmin(req: Request): boolean {
-  const secret = process.env.BROK_OG_ADMIN_SECRET?.trim();
-  if (!secret) return false;
-  const header = req.headers.get("x-brok-og-admin")?.trim();
-  return header === secret;
-}
 
 function makeCode(): string {
   return "OG" + randomBytes(4).toString("hex").toUpperCase();

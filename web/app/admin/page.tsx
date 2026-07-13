@@ -12,8 +12,16 @@ import {
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  AdminPasskeyGate,
+  clearAdminSession,
+  loadAdminSession,
+} from "@/components/admin/AdminPasskeyGate";
 import { CorrectAnswersPanel } from "@/components/admin/CorrectAnswersPanel";
+import { MediumMemoryPanel } from "@/components/admin/MediumMemoryPanel";
+import { MemoryHierarchyPanel } from "@/components/admin/MemoryHierarchyPanel";
 import { TreasuryBuybackPanel } from "@/components/admin/TreasuryBuybackPanel";
+import { adminAuthHeaders } from "@/lib/adminAuthClient";
 
 interface DashboardData {
   generatedAt: string;
@@ -41,7 +49,7 @@ interface DashboardData {
       at: string;
     }[];
   };
-  kironCanon: { documents: number };
+  kironCanon: { documents: number; error?: string | null; note?: string };
   revenue: {
     subscriptionCheckoutsTracked: number;
     estimatedFirstMonthUsd: number;
@@ -58,21 +66,32 @@ interface DashboardData {
 }
 
 export default function AdminPage() {
-  const [secret, setSecret] = useState("");
+  const [session, setSession] = useState<string | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!secret.trim()) return;
+  const load = useCallback(async (token: string) => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/dashboard", {
-        headers: { "x-brok-og-admin": secret.trim() },
+        headers: adminAuthHeaders({ session: token }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "forbidden");
+      if (!res.ok) {
+        // Session expired or secret rotated — force re-login instead of stuck "forbidden".
+        if (res.status === 403 || json.error === "forbidden") {
+          clearAdminSession();
+          setSession(null);
+          setData(null);
+          setError(
+            "Admin session expired or invalid. Sign in again with your admin secret (or passkey if registered). Sessions last 8 hours."
+          );
+          return;
+        }
+        throw new Error(json.error ?? "load_failed");
+      }
       setData(json);
     } catch (e) {
       setData(null);
@@ -80,16 +99,20 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [secret]);
-
-  useEffect(() => {
-    const saved = sessionStorage.getItem("brok_admin_secret");
-    if (saved) setSecret(saved);
   }, []);
 
-  const saveAndLoad = () => {
-    sessionStorage.setItem("brok_admin_secret", secret.trim());
-    load();
+  useEffect(() => {
+    const saved = loadAdminSession();
+    if (saved) {
+      setSession(saved);
+      void load(saved);
+    }
+  }, [load]);
+
+  const handleSession = (token: string) => {
+    setError(null);
+    setSession(token);
+    void load(token);
   };
 
   return (
@@ -111,23 +134,22 @@ export default function AdminPage() {
         </p>
       </header>
 
-      <section className="rounded-xl border border-white/10 bg-bg-card p-4 flex flex-col sm:flex-row gap-3">
-        <input
-          type="password"
-          placeholder="BROK_OG_ADMIN_SECRET"
-          value={secret}
-          onChange={(e) => setSecret(e.target.value)}
-          className="flex-1 px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm font-mono"
-        />
-        <button
-          type="button"
-          onClick={saveAndLoad}
-          disabled={loading || !secret.trim()}
-          className="px-5 py-2.5 rounded-lg border border-neon-cyan/50 text-neon-cyan text-sm hover:bg-neon-cyan/10 disabled:opacity-50"
-        >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin inline" /> : "Load"}
-        </button>
-      </section>
+      <AdminPasskeyGate
+        session={session}
+        onSession={handleSession}
+        onClear={() => {
+          setSession(null);
+          setData(null);
+          setError(null);
+        }}
+      />
+
+      {loading && !data && session && (
+        <p className="text-sm text-white/45 flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading dashboard…
+        </p>
+      )}
 
       {error && (
         <p className="text-sm text-red-400/90 border border-red-400/20 rounded-lg px-4 py-3">
@@ -135,7 +157,7 @@ export default function AdminPage() {
         </p>
       )}
 
-      {data && (
+      {data && session && (
         <div className="space-y-4">
           {data.outages.length > 0 && (
             <div className="rounded-xl border border-amber-400/25 bg-amber-400/5 p-4 flex gap-3">
@@ -169,7 +191,11 @@ export default function AdminPage() {
             <StatCard
               icon={BookOpen}
               label="Kiron Canon docs"
-              value={String(data.kironCanon.documents)}
+              value={
+                data.kironCanon.error
+                  ? `Error: ${data.kironCanon.error}`
+                  : `${data.kironCanon.documents} in core_knowledge`
+              }
             />
             <StatCard
               icon={Activity}
@@ -197,9 +223,13 @@ export default function AdminPage() {
             </ul>
           </section>
 
-          <CorrectAnswersPanel adminSecret={secret} />
+          <MemoryHierarchyPanel />
 
-          <TreasuryBuybackPanel adminSecret={secret} />
+          <MediumMemoryPanel adminSession={session} />
+
+          <CorrectAnswersPanel adminSession={session} />
+
+          <TreasuryBuybackPanel adminSession={session} />
 
           <section className="rounded-xl border border-neon-cyan/20 bg-neon-cyan/5 p-4 space-y-4">
             <h2 className="text-sm font-medium text-white/85 flex items-center gap-2">

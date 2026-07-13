@@ -26,18 +26,20 @@ export const MODEL_ROUTING: ModelRoute[] = [
     role: "canon_gate",
   },
   {
-    id: "grok",
-    label: "xAI Grok",
-    model: process.env.XAI_MODEL ?? "grok-3",
-    role: "premium",
-    envKey: "XAI_API_KEY",
-  },
-  {
     id: "groq",
-    label: "Groq Llama",
+    label: "BROK Intelligence (Llama 70B)",
     model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
     role: "primary",
     envKey: "GROQ_API_KEY",
+  },
+  {
+    id: "grok",
+    label: "BROK Genius (Grok) — markets/crypto/regs first",
+    model: process.env.XAI_MODEL ?? "grok-3",
+    // Preferential for live markets / crypto / banking regs / deep investments;
+    // also capacity backup for all topics when Groq is limited.
+    role: "premium",
+    envKey: "XAI_API_KEY",
   },
   {
     id: "vertex",

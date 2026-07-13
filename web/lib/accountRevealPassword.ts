@@ -23,8 +23,15 @@ export function verifyRevealPassword(password: string, stored: string): boolean 
   }
 }
 
+/**
+ * Device PIN: 4–8 digits preferred for simplicity.
+ * Also accepts longer passphrases (8–128) for users who already set one.
+ */
 export function validateRevealPassword(password: string): string | null {
-  if (!password || password.length < 8) {
+  if (!password) return "password_too_short";
+  const digitsOnly = /^\d{4,8}$/.test(password);
+  const passphrase = password.length >= 8 && password.length <= 128;
+  if (!digitsOnly && !passphrase) {
     return "password_too_short";
   }
   if (password.length > 128) {

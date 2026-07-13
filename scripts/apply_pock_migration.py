@@ -34,6 +34,16 @@ ORDERED = [
     "010_genius_sub_wallets.sql",
     "011_brok_qa_admin.sql",
     "012_custody_release_settlement.sql",
+    "013_account_reveal_password.sql",
+    "014_device_account_bindings.sql",
+    "015_partial_custody_release.sql",
+    "016_metering_enforcement.sql",
+    "017_brok_chat_threads.sql",
+    "018_resolve_brok_account.sql",
+    "019_admin_passkeys.sql",
+    "020_brok_medium_term_memory.sql",
+    "021_brok_memory_suggestions.sql",
+    "022_brok_founder_x_feed.sql",
 ]
 
 

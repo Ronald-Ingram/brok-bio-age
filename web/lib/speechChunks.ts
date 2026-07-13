@@ -4,7 +4,7 @@ import { extractSentences, normalizeForSpeech } from "./spokenText";
 export const TTS_CHUNK_CHARS = 350;
 
 /** Max segments for one full-length read (keeps total under Vercel timeout). */
-export const MAX_TTS_SEGMENTS = 18;
+export const MAX_TTS_SEGMENTS = 24;
 
 export function chunkTextForTts(
   text: string,

@@ -47,6 +47,23 @@ export const TRUST_SECTIONS = [
     title: "Reserved $POCK · USD display",
     body: POCK_RESERVED_USD_COPY,
   },
+  {
+    id: "link-device",
+    title: "One wallet, every device",
+    body: `Account code (BROK-…) + Device PIN (4–8 digits) = your Genius Wallet on phone and Mac.
+
+• One browser shows one wallet at a time → Switch account to open another.
+• PIN is per account, not per device (change once, use everywhere).
+• Not your Apple password / Face ID — digits only.
+• New browsers may open a temporary trial; open your real account to merge.
+
+Family sub-wallets are allowances under the parent, not separate logins.`,
+  },
+  {
+    id: "device-pin",
+    title: "Device PIN (simple)",
+    body: `Set PIN under your account code on the wallet with your real balance. Use the same PIN with Switch account on every other device. Digits only — not Keychain, not biometrics.`,
+  },
 ] as const;
 
 /** Expandable Q&A — also ingested to Kiron Canon for BROK chat */

@@ -13,6 +13,7 @@ import {
   createPockInvite,
   connectSolanaWallet,
   createGiftInvite,
+  autoClaimGiftInvite,
   requestCustodyRelease,
   sendToUser,
   spendOnPremium,
@@ -133,15 +134,19 @@ export function PockProvider({ children }: { children: ReactNode }) {
     async (opts?: { sessionId?: string }) => {
       if (!configured) return;
       try {
-        setReconciling(true);
-        const reconcileResult = await syncPockReconcile(opts?.sessionId);
-        if (reconcileResult) setReconcile(reconcileResult);
-
         const [u, l] = await Promise.all([fetchCurrentUser(), fetchLedger()]);
         setUser(u);
         setLedger(l);
         setReady(Boolean(u?.trial_credited));
         await syncRevealState(u);
+      } catch (e) {
+        console.error("POCK refresh failed:", e);
+      }
+
+      try {
+        setReconciling(true);
+        const reconcileResult = await syncPockReconcile(opts?.sessionId);
+        if (reconcileResult) setReconcile(reconcileResult);
 
         if (
           reconcileResult &&
@@ -153,7 +158,7 @@ export function PockProvider({ children }: { children: ReactNode }) {
           await syncRevealState(u2);
         }
       } catch (e) {
-        console.error("POCK refresh failed:", e);
+        console.error("POCK reconcile failed:", e);
       } finally {
         setReconciling(false);
       }
@@ -200,6 +205,13 @@ export function PockProvider({ children }: { children: ReactNode }) {
       try {
         const authed = await ensureAuthSession();
         if (!authed) return;
+
+        const sessionId =
+          typeof window !== "undefined"
+            ? new URLSearchParams(window.location.search).get("session_id") ??
+              undefined
+            : undefined;
+
         const existing = await fetchCurrentUser();
         if (!existing?.trial_credited) {
           try {
@@ -209,25 +221,63 @@ export function PockProvider({ children }: { children: ReactNode }) {
             if (credited) {
               showToast("🎁 100 $POCK credited!", "success");
             }
-            await refresh();
-            return;
           } catch (bootErr) {
             console.error("POCK auto-bootstrap failed:", bootErr);
           }
+        } else {
+          const [u, l] = await Promise.all([fetchCurrentUser(), fetchLedger()]);
+          setUser(u);
+          setLedger(l);
+          setReady(Boolean(u?.trial_credited));
         }
-        const sessionId =
-          typeof window !== "undefined"
-            ? new URLSearchParams(window.location.search).get("session_id") ??
-              undefined
-            : undefined;
-        await refresh({ sessionId });
+
+        setLoading(false);
+        void refresh({ sessionId });
       } catch (e) {
         console.error("POCK init failed:", e);
-      } finally {
         setLoading(false);
       }
     })();
   }, [configured, refresh, showToast]);
+
+  useEffect(() => {
+    if (!configured || !ready || !user) return;
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const claimToken = params.get("claim")?.trim();
+    if (!claimToken) return;
+
+    const storageKey = `brok_gift_claim:${claimToken.slice(0, 24)}`;
+    if (sessionStorage.getItem(storageKey)) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await autoClaimGiftInvite(claimToken);
+        if (cancelled) return;
+        sessionStorage.setItem(storageKey, "done");
+        showToast(result.message, result.alreadyClaimed ? "info" : "success");
+        await refresh();
+        const url = new URL(window.location.href);
+        url.searchParams.delete("claim");
+        window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+      } catch (e) {
+        if (cancelled) return;
+        sessionStorage.setItem(storageKey, "failed");
+        const msg = e instanceof Error ? e.message : "claim_failed";
+        if (msg === "gift_already_claimed") {
+          showToast("This gift was already claimed by someone else.", "warning");
+        } else if (msg !== "invite_expired_or_invalid") {
+          showToast("Could not claim gift — try again or ask the sender to resend.", "error");
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [configured, ready, user, refresh, showToast]);
 
   const createAccount = useCallback(async () => {
     if (!configured) {

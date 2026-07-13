@@ -9,6 +9,7 @@ import {
   Search,
   Sparkles,
 } from "lucide-react";
+import { adminAuthHeaders } from "@/lib/adminAuthClient";
 import { useCallback, useEffect, useState } from "react";
 
 interface ChatLogItem {
@@ -34,10 +35,10 @@ interface HighIqAlert {
 }
 
 interface CorrectAnswersPanelProps {
-  adminSecret: string;
+  adminSession: string;
 }
 
-export function CorrectAnswersPanel({ adminSecret }: CorrectAnswersPanelProps) {
+export function CorrectAnswersPanel({ adminSession }: CorrectAnswersPanelProps) {
   const [items, setItems] = useState<ChatLogItem[]>([]);
   const [alerts, setAlerts] = useState<HighIqAlert[]>([]);
   const [querent, setQuerent] = useState("");
@@ -51,11 +52,11 @@ export function CorrectAnswersPanel({ adminSecret }: CorrectAnswersPanelProps) {
 
   const headers = {
     "Content-Type": "application/json",
-    "x-brok-og-admin": adminSecret,
+    ...adminAuthHeaders({ session: adminSession }),
   };
 
   const load = useCallback(async () => {
-    if (!adminSecret.trim()) return;
+    if (!adminSession.trim()) return;
     setLoading(true);
     setError(null);
     try {
@@ -79,7 +80,7 @@ export function CorrectAnswersPanel({ adminSecret }: CorrectAnswersPanelProps) {
     } finally {
       setLoading(false);
     }
-  }, [adminSecret, querent]);
+  }, [adminSession, querent]);
 
   useEffect(() => {
     void load();
