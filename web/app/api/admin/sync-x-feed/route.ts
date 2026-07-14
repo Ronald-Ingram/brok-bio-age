@@ -2,6 +2,7 @@ import { assertAdmin } from "@/lib/adminAuth";
 import {
   buildRonaldIngramXKnowledgeBlock,
   syncFounderXFeed,
+  xApiConfigured,
   type FounderPost,
 } from "@/lib/ronaldIngramX";
 import { getServiceSupabase } from "@/lib/supabase/server";
@@ -27,6 +28,10 @@ export async function GET(req: Request) {
     return NextResponse.json({
       count: data?.length ?? 0,
       posts: data ?? [],
+      xApiConfigured: xApiConfigured(),
+      hint: xApiConfigured()
+        ? "X_BEARER_TOKEN present — Sync will pull up to ~100 recent @RonaldIngram posts"
+        : "Set X_BEARER_TOKEN (or TWITTER_BEARER_TOKEN) on Vercel for full timeline sync",
     });
   } catch (e) {
     return NextResponse.json(
@@ -50,6 +55,12 @@ export async function POST(req: Request) {
       ok: true,
       ...result,
       previewChars: preview.length,
+      hint:
+        result.source === "x_api"
+          ? "Synced from official X API"
+          : result.source === "jina"
+            ? "X API missed — used public scrape. Confirm X_BEARER_TOKEN on production."
+            : "Fell back to snapshot — check token and X API access.",
     });
   } catch (e) {
     return NextResponse.json(

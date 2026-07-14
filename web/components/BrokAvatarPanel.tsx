@@ -664,7 +664,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 Copy full text
               </button>
             </div>
-            <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed max-h-[min(70vh,720px)] overflow-y-auto overscroll-contain">
+            <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed max-h-[min(32vh,280px)] sm:max-h-[min(40vh,360px)] overflow-y-auto overscroll-contain">
               {response}
             </p>
           </div>

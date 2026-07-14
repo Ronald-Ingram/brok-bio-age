@@ -1,25 +1,25 @@
 "use client";
 
 import { usePock } from "@/context/PockContext";
-import { Coins, Sparkles } from "lucide-react";
+import { Coins, Sparkles, Wallet } from "lucide-react";
+import Link from "next/link";
 
 interface PockHeaderProps {
   onOpenWallet?: () => void;
 }
 
 export function PockHeader({ onOpenWallet }: PockHeaderProps) {
-  const { user, ready, createAccount } = usePock();
+  const { user, ready, needsWalletChoice } = usePock();
 
-  if (!ready) {
+  if (!ready || needsWalletChoice) {
     return (
-      <button
-        type="button"
-        onClick={createAccount}
+      <Link
+        href="/genius-wallet"
         className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 transition-colors"
       >
-        <Sparkles className="w-4 h-4" />
-        Create Free Account
-      </button>
+        <Wallet className="w-4 h-4" />
+        Genius Wallet
+      </Link>
     );
   }
 

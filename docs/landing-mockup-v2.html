@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BROK Landing Mockup v2 — review only (not live)</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --card: #12121a;
+      --cyan: #00f9ff;
+      --muted: rgba(240, 240, 245, 0.55);
+      --dim: rgba(240, 240, 245, 0.38);
+      --line: rgba(255, 255, 255, 0.1);
+      --amber: #fbbf24;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: #f0f0f5;
+      line-height: 1.55;
+    }
+    .banner {
+      position: sticky; top: 0; z-index: 50;
+      background: #3b1d0a;
+      color: #fde68a;
+      text-align: center;
+      font-size: 12px;
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(251, 191, 36, 0.35);
+    }
+    .banner strong { color: #fef3c7; }
+    main { max-width: 72rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    .eyebrow {
+      font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase;
+      color: rgba(0, 249, 255, 0.75); text-align: center; margin-bottom: 1rem;
+    }
+    h1 {
+      max-width: 48rem; margin: 0 auto; text-align: center;
+      font-size: clamp(1.25rem, 2.8vw, 1.65rem); font-weight: 500;
+      line-height: 1.4; color: rgba(255,255,255,0.92);
+    }
+    .sub {
+      text-align: center; color: rgba(0, 249, 255, 0.85); font-weight: 500;
+      margin: 1rem auto 0; max-width: 40rem; font-size: 1rem;
+    }
+    .hero-slot {
+      margin: 2rem auto; max-width: 28rem; height: 280px;
+      border-radius: 1.25rem; border: 1px solid rgba(0,249,255,0.2);
+      background: linear-gradient(160deg, rgba(0,249,255,0.08), transparent 55%), #101018;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--dim); font-size: 13px; text-align: center; padding: 1.5rem;
+    }
+    .lede {
+      max-width: 42rem; margin: 1.5rem auto 0; text-align: center;
+      color: var(--muted); font-size: 0.95rem;
+    }
+    .cta-grid {
+      display: grid; gap: 0.75rem; margin: 2rem auto 0; max-width: 56rem;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .cta {
+      border: 1px solid var(--line); background: var(--card); border-radius: 1rem;
+      padding: 1.1rem 0.85rem; text-align: center; text-decoration: none; color: inherit;
+    }
+    .cta strong { display: block; font-size: 0.9rem; color: rgba(255,255,255,0.92); }
+    .cta span { display: block; margin-top: 0.4rem; font-size: 11px; color: var(--dim); line-height: 1.35; }
+    .cta:hover { border-color: rgba(0,249,255,0.4); background: rgba(0,249,255,0.05); }
+
+    section { margin-top: 3.5rem; }
+    .sec-label {
+      font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+      color: rgba(0,249,255,0.8); margin-bottom: 0.5rem;
+    }
+    h2 {
+      font-size: clamp(1.35rem, 2.5vw, 1.75rem); font-weight: 600;
+      margin: 0 0 0.75rem; color: rgba(255,255,255,0.95);
+    }
+    .sec-intro { color: var(--muted); font-size: 0.95rem; max-width: 46rem; margin-bottom: 1.5rem; }
+
+    .two-col { display: grid; gap: 1rem; grid-template-columns: 1fr; }
+    @media (min-width: 800px) { .two-col { grid-template-columns: 1fr 1fr; } }
+
+    .card {
+      border: 1px solid var(--line); background: var(--card);
+      border-radius: 1rem; padding: 1.25rem 1.35rem;
+    }
+    .card.now { border-color: rgba(0,249,255,0.28); background: linear-gradient(180deg, rgba(0,249,255,0.07), var(--card)); }
+    .card.soon { border-color: rgba(251,191,36,0.25); background: linear-gradient(180deg, rgba(251,191,36,0.06), var(--card)); }
+    .card h3 { margin: 0 0 0.75rem; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .badge {
+      font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+      padding: 0.2rem 0.5rem; border-radius: 999px; border: 1px solid;
+    }
+    .badge.now { color: var(--cyan); border-color: rgba(0,249,255,0.4); }
+    .badge.soon { color: var(--amber); border-color: rgba(251,191,36,0.4); }
+
+    ul.caps { margin: 0; padding: 0; list-style: none; }
+    ul.caps li {
+      position: relative; padding: 0.45rem 0 0.45rem 1.1rem;
+      font-size: 0.875rem; color: var(--muted); border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    ul.caps li:last-child { border-bottom: 0; }
+    ul.caps li::before {
+      content: ""; position: absolute; left: 0; top: 0.85rem;
+      width: 6px; height: 6px; border-radius: 50%; background: var(--cyan);
+    }
+    .card.soon ul.caps li::before { background: var(--amber); }
+
+    .ftep {
+      border: 1px solid rgba(0,249,255,0.3);
+      background: radial-gradient(ellipse at top, rgba(0,249,255,0.12), transparent 55%), var(--card);
+      border-radius: 1.25rem; padding: 1.75rem 1.5rem;
+    }
+    .ftep .metric {
+      display: grid; gap: 0.75rem; margin-top: 1.25rem;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .ftep .metric div {
+      border: 1px solid var(--line); border-radius: 0.75rem; padding: 0.85rem;
+      background: rgba(0,0,0,0.25);
+    }
+    .ftep .metric strong { display: block; color: var(--cyan); font-size: 1.1rem; }
+    .ftep .metric span { font-size: 12px; color: var(--dim); }
+
+    .use-grid {
+      display: grid; gap: 0.75rem;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+    .use {
+      border: 1px solid var(--line); border-radius: 0.9rem; padding: 1rem;
+      background: rgba(0,0,0,0.2);
+    }
+    .use h4 { margin: 0 0 0.35rem; font-size: 0.9rem; color: rgba(255,255,255,0.9); }
+    .use p { margin: 0; font-size: 12px; color: var(--dim); }
+
+    .pricing-note {
+      margin-top: 1.5rem; border: 1px solid var(--line); border-radius: 1rem;
+      padding: 1.1rem 1.25rem; background: rgba(0,0,0,0.3); font-size: 0.875rem; color: var(--muted);
+    }
+    .pricing-note .kill {
+      text-decoration: line-through; color: #f87171; opacity: 0.85;
+    }
+    .pricing-note .ok { color: rgba(0,249,255,0.9); }
+
+    .about-grid {
+      display: grid; gap: 1rem;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 800px) { .about-grid { grid-template-columns: 1.1fr 0.9fr; } }
+
+    footer {
+      margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.08);
+      text-align: center; font-size: 11px; color: var(--dim);
+    }
+    .notes {
+      margin-top: 3rem; padding: 1.25rem; border-radius: 1rem;
+      border: 1px dashed rgba(251,191,36,0.4); background: rgba(251,191,36,0.06);
+      font-size: 13px; color: #fde68a;
+    }
+    .notes h3 { margin: 0 0 0.5rem; color: #fef3c7; font-size: 14px; }
+    .notes ul { margin: 0.5rem 0 0; padding-left: 1.2rem; }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    <strong>MOCKUP ONLY</strong> — not production · review copy &amp; structure · no live deploy from this file
+  </div>
+
+  <main>
+    <!-- HERO -->
+    <p class="eyebrow">Rebel Banker Futurist · Public launch · July 24, 2026</p>
+    <h1>
+      BROK gives you the output of 100 people so you can build real wealth and protect the only asset that ultimately matters — your time and healthspan.
+    </h1>
+    <p class="sub">BROK in every pocket — for individuals, freelancers, creators, traders, and all economic entities.</p>
+
+    <div class="hero-slot">
+      [Live site: BROK avatar / hero visual]<br />
+      Always-on proxy · voice · chat · Genius Wallet
+    </div>
+
+    <p class="lede">
+      Your always-available intelligence layer for capital, strategy, and self-sovereignty —
+      structured, explainable, and auditable. Access insights institutions pay Ingram thousands
+      an hour for — at pennies on the dollar. Powered by $POCK, the first crypto built by a banking innovator, creator, and futurist.
+    </p>
+
+    <div class="cta-grid">
+      <a class="cta" href="#"><strong>Genius Wallet</strong><span>$POCK · hybrid custody · gifts</span></a>
+      <a class="cta" href="#"><strong>Chat with BROK</strong><span>Always-on proxy · voice optional</span></a>
+      <a class="cta" href="#"><strong>Bio-Age</strong><span>Levine + BROK-adjusted healthspan</span></a>
+      <a class="cta" href="#"><strong>Inneagram</strong><span>Mission · culture · self-knowledge</span></a>
+    </div>
+
+    <!-- CAPABILITIES -->
+    <section id="capabilities">
+      <p class="sec-label">Capabilities</p>
+      <h2>What BROK does now — and what’s next</h2>
+      <p class="sec-intro">
+        BROK is an always-on proxy for how you work, decide, and build wealth: financial literacy for the singularity economy, foresight at whatever level you’re at, and structured decision-making with patented IEM (Ingram Evaluation Matrix) insights — from banking to healthcare to warfare and everything between.
+      </p>
+
+      <div class="two-col">
+        <article class="card now">
+          <h3><span class="badge now">Available now</span> Live on brok.neobanx.com</h3>
+          <ul class="caps">
+            <li><strong>Always-on proxy</strong> — chat, voice, and live avatar for strategy, deals, and daily decisions</li>
+            <li><strong>Institutional-grade insight, consumer price</strong> — banking, capital, and structure thinking that once cost four figures an hour</li>
+            <li><strong>Financial literacy for the singularity economy</strong> — foresight scaled to your level (solo → org → nation-scale framing)</li>
+            <li><strong>IEM decision intelligence</strong> — structured, explainable, auditable evaluation (Ingram Evaluation Matrix) across verticals</li>
+            <li><strong>Genius Wallet + $POCK</strong> — first crypto stack designed by a banking innovator; buy, gift, reserve, self-custody path</li>
+            <li><strong>Bio-Age</strong> — Levine PhenoAge + BROK-adjusted healthspan tracking</li>
+            <li><strong>Ingram Inneagram</strong> — personality / culture / mission-vision-goal clarity for you or your organization</li>
+            <li><strong>Tax scenario review</strong> — complex situations; founder Ingram recovered hundreds of thousands missed by accountants (case-style, not tax advice)</li>
+            <li><strong>Agreements &amp; templates</strong> — review and draft business agreement patterns</li>
+            <li><strong>Funding &amp; capital</strong> — prepare applications, sharpen pitches, map investor conversations</li>
+            <li><strong>Kiron Canon memory</strong> — founder-grade knowledge hierarchy (not a generic chatbot)</li>
+            <li><strong>Family / sub-wallets</strong> — parent-controlled $POCK pockets</li>
+          </ul>
+        </article>
+
+        <article class="card soon">
+          <h3><span class="badge soon">Coming soon</span> On the roadmap</h3>
+          <ul class="caps">
+            <li><strong>Multi-account reconciliation</strong> — one picture across banks, wallets, and entities</li>
+            <li><strong>CRM design &amp; operation</strong> — run relationships as a Zero Person Enterprise</li>
+            <li><strong>Due diligence &amp; opportunity analysis</strong> — personal POV + IEM scoring on deals</li>
+            <li><strong>Neoscore</strong> — patented alternative credit scoring for humans <em>and</em> AI agents</li>
+            <li><strong>Deeper founder twin</strong> — continuous sync from public Ingram / Grokipedia / LinkedIn-class corpus</li>
+            <li><strong>BROK-controlled spend wallet</strong> — agentic payments inside limits you set</li>
+            <li><strong>Org culture OS</strong> — Inneagram + goals + FTEP dashboards for teams and nations</li>
+            <li><strong>Full ZPE stack</strong> — ops, compliance, billing, multi-channel creator empire tools</li>
+            <li><strong>Cross-border &amp; VBZ-ready privacy rails</strong> — self-sovereign banking vision at scale</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <!-- FTEP -->
+    <section id="ftep">
+      <div class="ftep">
+        <p class="sec-label">The new KPI</p>
+        <h2>FTEP — Full-Time Equivalent Person output</h2>
+        <p class="sec-intro" style="margin-bottom:0.75rem">
+          In the singularity economy, the unit that matters is not headcount — it is
+          <strong style="color:#fff">how many full-time people you can output with leverage</strong>.
+          FTEP measures productive capacity: one person + BROK aiming at <strong style="color:var(--cyan)">~100 FTEP</strong>
+          of analyst, CFO, ops, and strategist work.
+        </p>
+        <p style="font-size:0.9rem;color:var(--muted);margin:0">
+          Every individual, community, organization, and nation will eventually be scored on FTEP —
+          how much real wealth, healthspan, and sovereign capability they produce per unit of human time.
+          BROK is the console that raises your FTEP without hiring a hundred people.
+        </p>
+        <div class="metric">
+          <div><strong>~100 FTEP</strong><span>Target leverage for a solo operator with BROK</span></div>
+          <div><strong>ZPE</strong><span>Zero Person Enterprise — team-scale output, sovereign control</span></div>
+          <div><strong>Time + healthspan</strong><span>The assets FTEP is meant to protect</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- USE CASES -->
+    <section id="use-cases">
+      <p class="sec-label">Use cases</p>
+      <h2>Who BROK is for</h2>
+      <p class="sec-intro">Eight starting personas — same stack, different missions.</p>
+      <div class="use-grid">
+        <div class="use"><h4>Veteran / operator</h4><p>Console for banking, ops, and 100-FTEP execution after service or career transition.</p></div>
+        <div class="use"><h4>Artist &amp; creator</h4><p>Gallery, royalties, merch, investments — multi-channel empire without a 20-person team.</p></div>
+        <div class="use"><h4>Small business owner</h4><p>24/7 CFO brain: cash flow, compliance, structure, scalable engine.</p></div>
+        <div class="use"><h4>Trader</h4><p>Explainable risk and portfolio logic — hedge-desk clarity on a personal stack.</p></div>
+        <div class="use"><h4>Investor</h4><p>Deal flow, diligence, allocation — family-office thinking without the payroll.</p></div>
+        <div class="use"><h4>Freelancer</h4><p>Productize skills, automate billing, 100× leverage on delivery.</p></div>
+        <div class="use"><h4>Young founder / grad</h4><p>Full startup brain: finance, taxes, ops, fundraising, pitch craft.</p></div>
+        <div class="use"><h4>Nation / community builder</h4><p>FTEP literacy, culture (Inneagram), and self-sovereign economic tooling at scale.</p></div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section id="about">
+      <p class="sec-label">Who we are</p>
+      <h2>About BROK · About Ronald Ingram</h2>
+      <div class="about-grid">
+        <article class="card">
+          <h3 style="margin-top:0">About BROK</h3>
+          <p style="font-size:0.9rem;color:var(--muted);margin:0 0 0.75rem">
+            BROK is Neobanx’s sovereign intelligence product — an always-available proxy that
+            combines capital strategy, decision science (IEM), healthspan tools, and Genius Wallet
+            ($POCK) in one stack. Private by design, self-sovereign by intent: you hold the account
+            code and Device PIN; hybrid custody today, full on-chain path for those who want it.
+          </p>
+          <p style="font-size:0.9rem;color:var(--muted);margin:0">
+            Built for wealth-first rebels who refuse to trade ownership for convenience —
+            and for institutions ready to measure themselves in FTEP, not bureaucracy.
+          </p>
+        </article>
+        <article class="card">
+          <h3 style="margin-top:0">About Ronald Ingram</h3>
+          <p style="font-size:0.9rem;color:var(--muted);margin:0 0 0.75rem">
+            Founder · Rebel Banker Futurist · creator of the Ingram Evaluation Matrix (IEM),
+            Ingram Inneagram, Neoscore vision, and the BROK / $POCK stack. Banking innovator,
+            creator, and owner who prices institutional insight for the mass market.
+          </p>
+          <p style="font-size:0.9rem;color:var(--muted);margin:0">
+            Public corpus (Grokipedia, LinkedIn, talks, Canon) trains the founder-grade memory
+            BROK draws on — so you get Ingram-class structure without Ingram-class hourly fees.
+            <!-- Live: link Grokipedia + LinkedIn when ready -->
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <!-- PRICING (cleaned) -->
+    <section id="pricing">
+      <p class="sec-label">Pricing</p>
+      <h2>Essential &amp; Pro — mass market, founder-grade intelligence</h2>
+      <p class="sec-intro">
+        Prelaunch MVP pricing. Subscriptions unlock included $POCK pools. Voice and live avatar
+        meter only while BROK is actively speaking — idle / static mode stays free.
+      </p>
+      <div class="two-col">
+        <article class="card">
+          <h3 style="margin-top:0">Essential</h3>
+          <p style="font-size:1.75rem;font-weight:600;margin:0.25rem 0">$9<span style="font-size:0.9rem;color:var(--dim)">/mo</span>
+            <span style="font-size:0.9rem;color:var(--dim);text-decoration:line-through;margin-left:0.5rem">$29</span></p>
+          <p style="font-size:0.85rem;color:var(--muted)">Included $POCK pool · chat · core tools</p>
+        </article>
+        <article class="card now">
+          <h3 style="margin-top:0">Pro</h3>
+          <p style="font-size:1.75rem;font-weight:600;margin:0.25rem 0;color:var(--cyan)">$49<span style="font-size:0.9rem;color:var(--dim)">/mo</span>
+            <span style="font-size:0.9rem;color:var(--dim);text-decoration:line-through;margin-left:0.5rem">$79</span></p>
+          <p style="font-size:0.85rem;color:var(--muted)">Larger pool · voice &amp; avatar ready · priority depth</p>
+        </article>
+      </div>
+
+      <div class="pricing-note">
+        <p style="margin:0 0 0.5rem"><strong style="color:#fff">Usage (user-facing — no internal finance jargon)</strong></p>
+        <p style="margin:0 0 0.5rem">
+          <span class="kill">Active usage only — voice &amp; avatar (≈80% margin target)</span>
+          → <span class="ok">Removed from public site</span>
+        </p>
+        <p style="margin:0;color:var(--muted)">
+          <strong style="color:rgba(255,255,255,0.8)">Replacement copy:</strong>
+          Voice and live avatar use small $POCK blocks only while BROK is speaking or lip-syncing.
+          Looking at a static image costs nothing. Transparent rates in-app; no “margin targets” on the marketing page.
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      <p>BROK by Neobanx · Sovereign intelligence for wealth-first rebels</p>
+      <p>Bio-Age is a research tool — not medical advice · Not tax, legal, or investment advice</p>
+      <p style="margin-top:0.5rem">Trust &amp; security · Genius Wallet · Subscribe</p>
+    </footer>
+
+    <div class="notes">
+      <h3>Reviewer notes (not on public page)</h3>
+      <ul>
+        <li>Kill internal line: “≈80% margin target” — confirmed removed in this mockup.</li>
+        <li>Add live links to Grokipedia profile + LinkedIn when you approve final URLs.</li>
+        <li>Tax / capital / warfare claims kept careful: educational / founder case-style, not licensed advice.</li>
+        <li>FTEP section is the educational KPI block for singularity economy framing.</li>
+        <li>Also candidates for “what else”: multi-language, mobile app, API for agents, insurance/estate modules, education FTEP curricula, sovereign identity (Neoscore), community/DAO wallets.</li>
+        <li>When you approve, we’ll port this into <code>web/app/page.tsx</code> + pricing component only (no surprise deploy of draft copy).</li>
+      </ul>
+    </div>
+  </main>
+</body>
+</html>

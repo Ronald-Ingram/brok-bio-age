@@ -1,11 +1,12 @@
 import { BrokHeroAvatar } from "@/components/BrokHeroAvatar";
 import { EnneagramStarIcon } from "@/components/EnneagramStarIcon";
 import { GeniusWalletIcon } from "@/components/GeniusWalletIcon";
+import { LandingSections } from "@/components/LandingSections";
 import { PrelaunchPricingSection } from "@/components/PrelaunchPricingSection";
+import { LANDING_LEDE } from "@/lib/landingCopy";
 import {
   BROK_IN_EVERY_POCKET,
   BROK_TAGLINE,
-  LANDING_VALUE_PROP,
   LAUNCH_DATE_LABEL,
   NORTH_STAR,
 } from "@/lib/siteCopy";
@@ -16,30 +17,30 @@ const CTAS = [
   {
     href: "/genius-wallet",
     label: "Genius Wallet",
-    desc: "Human wallet for Genius Token ($POCK) · gift to inner circle",
+    desc: "$POCK · hybrid custody · gifts",
     icon: GeniusWalletIcon,
     custom: true,
   },
   {
+    href: "/chat",
+    label: "Chat with BROK",
+    desc: "Always-on proxy · voice optional",
+    icon: MessageSquare,
+    custom: false,
+  },
+  {
     href: "/bio-age",
-    label: "Bio-Age Calculator",
-    desc: "Levine PhenoAge + BROK-adjusted biological age",
+    label: "Bio-Age",
+    desc: "Levine + BROK-adjusted healthspan",
     icon: Calculator,
     custom: false,
   },
   {
     href: "/inneagram",
     label: "Inneagram",
-    desc: "Ingram archetype profile — Tree of Life mapping",
+    desc: "Mission · culture · self-knowledge",
     icon: EnneagramStarIcon,
     custom: true,
-  },
-  {
-    href: "/chat",
-    label: "Chat with BROK",
-    desc: "Voice, live avatar, deals, strategy, Kiron Canon",
-    icon: MessageSquare,
-    custom: false,
   },
 ] as const;
 
@@ -64,7 +65,7 @@ export default function LandingPage() {
         </div>
 
         <p className="mt-8 max-w-2xl text-sm leading-relaxed text-white/55 sm:text-base">
-          {LANDING_VALUE_PROP}
+          {LANDING_LEDE}
         </p>
 
         <div className="mt-8 grid w-full max-w-4xl gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
@@ -91,14 +92,19 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <div className="mt-20 sm:mt-24">
+      <LandingSections />
+
+      <div className="mt-16 sm:mt-20">
         <PrelaunchPricingSection />
       </div>
 
-      <footer className="mt-16 border-t border-white/8 pt-8 text-center text-[11px] text-white/35">
+      <footer className="mt-16 border-t border-white/8 pt-8 text-center text-[11px] text-white/35 space-y-1">
         <p>BROK by Neobanx · Sovereign intelligence for wealth-first rebels</p>
-        <p className="mt-1">
-          Bio-Age is a research tool — not medical advice.{" "}
+        <p>
+          Bio-Age is a research tool — not medical advice. Content is not tax,
+          legal, or investment advice.
+        </p>
+        <p>
           <Link href="/bio-age" className="text-neon-cyan/70 hover:underline">
             Calculator
           </Link>
@@ -109,6 +115,18 @@ export default function LandingPage() {
           {" · "}
           <Link href="/trust" className="text-neon-cyan/70 hover:underline">
             Trust &amp; security
+          </Link>
+          {" · "}
+          <Link href="/#capabilities" className="text-neon-cyan/70 hover:underline">
+            Capabilities
+          </Link>
+          {" · "}
+          <Link href="/#ftep" className="text-neon-cyan/70 hover:underline">
+            FTEP
+          </Link>
+          {" · "}
+          <Link href="/#about" className="text-neon-cyan/70 hover:underline">
+            About
           </Link>
         </p>
       </footer>

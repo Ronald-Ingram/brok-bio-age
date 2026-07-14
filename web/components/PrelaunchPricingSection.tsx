@@ -5,6 +5,7 @@ import {
   PRELAUNCH_TIERS,
   USAGE_PRICING,
 } from "@/lib/prelaunchPricing";
+import { USAGE_PUBLIC_BLURB } from "@/lib/landingCopy";
 import { BROK_IN_EVERY_POCKET } from "@/lib/siteCopy";
 import { SUBSCRIBE_PATH } from "@/lib/subscriptionConfig";
 import { Check, Sparkles } from "lucide-react";
@@ -21,13 +22,13 @@ export function PrelaunchPricingSection() {
           {PRELAUNCH_LABEL}
         </p>
         <h2 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white/95">
-          Essential &amp; Pro — built for the mass market
+          Essential &amp; Pro — mass market, founder-grade intelligence
         </h2>
         <p className="mx-auto max-w-2xl text-sm text-white/50 leading-relaxed">
           {BROK_IN_EVERY_POCKET} Subscriptions unlock included $POCK pools.
-          Metered voice and live avatar blocks bill only while BROK is actively
-          speaking or animating — static mode stays free. Lock in{" "}
-          {PRELAUNCH_LABEL.toLowerCase()} before July 24.
+          Voice and live avatar meter only while BROK is actively speaking —
+          idle / static mode stays free. Lock in {PRELAUNCH_LABEL.toLowerCase()}{" "}
+          before July 24.
         </p>
       </div>
 
@@ -89,24 +90,26 @@ export function PrelaunchPricingSection() {
         )}
       </div>
 
-      <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-black/30 px-5 py-4 sm:px-6">
-        <p className="text-[10px] uppercase tracking-wider text-white/40 mb-3">
-          Active usage only — voice &amp; avatar (≈{USAGE_PRICING.marginTargetPct}%
-          margin target)
+      <div className="mx-auto max-w-3xl rounded-2xl border border-white/10 bg-black/30 px-5 py-4 sm:px-6 space-y-3">
+        <p className="text-[10px] uppercase tracking-wider text-white/40">
+          Usage — only while BROK is active
         </p>
+        <p className="text-xs text-white/50 leading-relaxed">{USAGE_PUBLIC_BLURB}</p>
         <div className="grid gap-3 sm:grid-cols-3 text-sm">
           <div>
             <p className="text-white/80 font-medium">Voice blocks</p>
             <p className="text-white/45 text-xs mt-0.5">
-              {USAGE_PRICING.voiceBlockPock} $POCK (~${USAGE_PRICING.voiceBlockUsd}) per{" "}
-              {USAGE_PRICING.blockDurationSec}s while speaking
+              {USAGE_PRICING.voiceBlockPock} $POCK (~$
+              {USAGE_PRICING.voiceBlockUsd}) per {USAGE_PRICING.blockDurationSec}
+              s while speaking
             </p>
           </div>
           <div>
             <p className="text-white/80 font-medium">Live avatar blocks</p>
             <p className="text-white/45 text-xs mt-0.5">
-              {USAGE_PRICING.avatarBlockPock} $POCK (~${USAGE_PRICING.avatarBlockUsd}) per{" "}
-              {USAGE_PRICING.blockDurationSec}s lip-sync
+              {USAGE_PRICING.avatarBlockPock} $POCK (~$
+              {USAGE_PRICING.avatarBlockUsd}) per {USAGE_PRICING.blockDurationSec}
+              s lip-sync
             </p>
           </div>
           <div>

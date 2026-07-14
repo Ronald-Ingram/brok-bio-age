@@ -33,25 +33,16 @@ import {
   formatUsd,
   usdToPock,
 } from "@/lib/purchaseConfig";
-import { IMPACT_OPTIONS, PREMIUM_FEATURES } from "@/lib/pockTypes";
 import { DigitalAssetDisclaimer } from "@/components/DigitalAssetDisclaimer";
 import { GiftOneLinkTip } from "@/components/GiftOneLinkTip";
 import { GiftShareActions } from "@/components/GiftShareActions";
 import { formatGiftSmsMessage } from "@/lib/giftPockMessage";
 import { motion } from "framer-motion";
-import {
-  Coins,
-  Gift,
-  Heart,
-  Loader2,
-  Send,
-  Sparkles,
-  Wallet,
-} from "lucide-react";
+import { Gift, Loader2, Send, Sparkles, Wallet } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-type ActionPanel = "premium" | "send" | "withdraw" | "gift" | "impact" | null;
+type ActionPanel = "send" | "withdraw" | "gift" | null;
 
 export interface WalletPanelProps {
   /** genius = Genius Wallet branding; neo = legacy BROK Neo-Wallet label */
@@ -74,11 +65,9 @@ export function WalletPanel({
     loading,
     configured,
     createAccount,
-    spendPremium,
     sendPockInvite,
     sendGiftInvite,
     withdraw,
-    donate,
   } = usePock();
 
   const [panel, setPanel] = useState<ActionPanel>(null);
@@ -94,7 +83,6 @@ export function WalletPanel({
   const [inviteResult, setInviteResult] = useState<PockInviteResult | null>(
     null
   );
-  const [impactId, setImpactId] = useState<string>(IMPACT_OPTIONS[0].id);
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [giftError, setGiftError] = useState<string | null>(null);
@@ -132,14 +120,15 @@ export function WalletPanel({
       <motion.section
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="rounded-2xl border border-neon-cyan/20 bg-bg-card p-10 text-center space-y-6"
+        className="rounded-2xl border border-neon-cyan/20 bg-bg-card p-10 text-center space-y-4"
       >
         <Wallet className="w-12 h-12 text-neon-cyan mx-auto opacity-80" />
         <div>
           <h2 className="text-xl font-semibold">{walletTitle}</h2>
           <p className="text-sm text-white/50 mt-2 max-w-md mx-auto">
-            Create a free BROK account and get 100 $POCK to try calculations,
-            premium features, and more — no wallet setup required.
+            Use the welcome panel: <strong className="text-white/70">I&apos;m new</strong>{" "}
+            or <strong className="text-white/70">I already have a wallet</strong>. We no
+            longer auto-create a trial on every visit.
           </p>
         </div>
         {!configured && (
@@ -147,41 +136,6 @@ export function WalletPanel({
             Wallet backend not configured on this deployment — contact support.
           </p>
         )}
-        {createError && (
-          <p className="text-sm text-red-400/90 border border-red-400/20 rounded-lg px-4 py-3 bg-red-400/5">
-            {createError}
-          </p>
-        )}
-        <button
-          type="button"
-          disabled={creatingAccount || !configured}
-          onClick={async () => {
-            setCreateError(null);
-            setCreatingAccount(true);
-            try {
-              await createAccount();
-            } catch (e) {
-              const msg = e instanceof Error ? e.message : "Could not create account";
-              setCreateError(
-                msg.includes("corp_float_insufficient")
-                  ? "Trial pool is refilling — wait a moment and try again."
-                  : msg.includes("sign_in_failed") || msg.includes("Protected deployment")
-                    ? "Sign-in blocked on this URL — use https://brok.neobanx.com/genius-wallet"
-                    : msg
-              );
-            } finally {
-              setCreatingAccount(false);
-            }
-          }}
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan font-medium text-sm hover:bg-neon-cyan/25 disabled:opacity-50 transition-colors"
-        >
-          {creatingAccount ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Sparkles className="w-4 h-4" />
-          )}
-          {creatingAccount ? "Creating account…" : "Create Free Account · 100 $POCK"}
-        </button>
       </motion.section>
     );
   }
@@ -247,11 +201,8 @@ export function WalletPanel({
         setInviteResult(result);
         setConfirming(false);
         return;
-      } else if (panel === "withdraw") withdraw(address.trim(), n);
-      else if (panel === "impact") {
-        const cause =
-          IMPACT_OPTIONS.find((o) => o.id === impactId)?.name ?? "Impact";
-        donate(cause, n);
+      } else if (panel === "withdraw") {
+        await withdraw(address.trim(), n);
       }
       resetForm();
     } catch (e) {
@@ -331,149 +282,69 @@ export function WalletPanel({
         </div>
       </motion.section>
 
-      {/* Always first: fix Mac vs phone split accounts */}
-      <AccountRestorePanel defaultOpen />
+      {/* Primary actions — forms open immediately below (not buried under products) */}
+      <section className="space-y-3">
+        <button
+          type="button"
+          onClick={() => {
+            setPanel(panel === "gift" ? null : "gift");
+            setConfirming(false);
+          }}
+          className={`w-full rounded-2xl border p-4 sm:p-5 text-left transition-colors ${
+            panel === "gift"
+              ? "border-neon-cyan/60 bg-neon-cyan/15 shadow-[0_0_24px_rgba(0,249,255,0.12)]"
+              : "border-neon-cyan/40 bg-gradient-to-r from-neon-cyan/12 via-bg-card to-bg-card hover:border-neon-cyan/55"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neon-cyan/20 border border-neon-cyan/35">
+              <Gift className="h-5 w-5 text-neon-cyan" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-white/95">Gift Credits</p>
+              <p className="text-xs text-neon-cyan/80 mt-0.5">
+                Sharing is caring
+              </p>
+            </div>
+          </div>
+        </button>
 
-      <NeoWalletProductsPanel featured={isGenius} />
-
-      <PockPriceTicker user={user} />
-
-      {isGenius && <CustodyStatusPanel />}
-
-      {isGenius && <GeniusSubWalletsPanel />}
-
-      <NeoWalletServicesPanel user={user} />
-
-      <PockOgClaimPanel />
-
-      {!user.subscription_active && user.subscription_tier !== "pock_og" && (
-        <section className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-xs text-white/55 space-y-1">
-          <p className="font-medium text-white/75">Free tier</p>
-          <p>{FREE_TIER_COPY.label}</p>
-          <p>
-            Additional reports: {FREE_TIER_BENEFITS.historyPreviewEntries}{" "}
-            preview entries in trends · subscribe to save full history.
-          </p>
-        </section>
-      )}
-
-      {user.subscription_tier === "premium" && (
-        <section className="rounded-xl border border-neon-cyan/20 bg-neon-cyan/5 px-4 py-3 text-xs text-white/60 space-y-1">
-          <p className="font-medium text-neon-cyan/90">Pro prize eligibility</p>
-          <p>
-            {PREMIUM_PRIZE_POOL_POCK.toLocaleString()} $POCK pool for largest
-            verified chrono − BROK bio-age delta. Winners may need notarized or
-            third-party lab validation; names and rankings may be published
-            promotionally.
-          </p>
-        </section>
-      )}
-
-      {/* Action buttons */}
-      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {(
-          [
-            {
-              id: "premium" as const,
-              label: "Premium Features",
-              icon: Sparkles,
-              color: "neon-cyan",
-            },
-            {
-              id: "send" as const,
-              label: "Send to User",
-              icon: Send,
-              color: "white",
-            },
-            {
-              id: "withdraw" as const,
-              label: "Withdraw",
-              icon: Wallet,
-              color: "white",
-            },
-            {
-              id: "gift" as const,
-              label: "Gift Credits",
-              icon: Gift,
-              color: "white",
-            },
-            {
-              id: "impact" as const,
-              label: "Impact",
-              icon: Heart,
-              color: "white",
-              stub: true,
-            },
-          ] as const
-        ).map((action) => (
+        <div className="grid grid-cols-2 gap-3">
           <button
-            key={action.id}
             type="button"
             onClick={() => {
-              setPanel(panel === action.id ? null : action.id);
+              setPanel(panel === "send" ? null : "send");
               setConfirming(false);
             }}
-            className={`relative rounded-xl border p-4 text-left transition-colors ${
-              panel === action.id
+            className={`rounded-xl border p-4 text-left transition-colors ${
+              panel === "send"
                 ? "border-neon-cyan/50 bg-neon-cyan/10"
                 : "border-white/10 bg-bg-card hover:border-white/20"
             }`}
           >
-            {"stub" in action && action.stub && (
-              <span className="absolute top-2 right-2 text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-white/10 text-white/40">
-                Soon
-              </span>
-            )}
-            <action.icon
-              className={`w-5 h-5 mb-2 ${
-                action.color === "neon-cyan" ? "text-neon-cyan" : "text-white/60"
-              }`}
-            />
-            <p className="text-xs font-medium text-white/80">{action.label}</p>
+            <Send className="w-5 h-5 mb-2 text-white/60" />
+            <p className="text-xs font-medium text-white/80">Send to User</p>
           </button>
-        ))}
+          <button
+            type="button"
+            onClick={() => {
+              setPanel(panel === "withdraw" ? null : "withdraw");
+              setConfirming(false);
+            }}
+            className={`rounded-xl border p-4 text-left transition-colors ${
+              panel === "withdraw"
+                ? "border-neon-cyan/50 bg-neon-cyan/10"
+                : "border-white/10 bg-bg-card hover:border-white/20"
+            }`}
+          >
+            <Wallet className="w-5 h-5 mb-2 text-white/60" />
+            <p className="text-xs font-medium text-white/80">Withdraw</p>
+          </button>
+        </div>
       </section>
 
-      {/* Expanded action panel */}
-      {panel === "premium" && (
-        <motion.section
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          className="rounded-2xl border border-white/10 bg-bg-card p-6 space-y-4"
-        >
-          <h3 className="text-sm font-medium text-white/70 flex items-center gap-2">
-            <Coins className="w-4 h-4 text-neon-cyan" />
-            Spend on Premium Features
-          </h3>
-          <div className="grid gap-3">
-            {PREMIUM_FEATURES.map((f) => {
-              const afford = user.pock_balance >= f.cost;
-              return (
-                <div
-                  key={f.id}
-                  className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-white/8 bg-black/20 px-4 py-3"
-                >
-                  <span className="text-2xl">{f.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white/85">{f.name}</p>
-                    <p className="text-xs text-white/45">{f.description}</p>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={!afford}
-                    onClick={() => spendPremium(f.name, f.cost)}
-                    className="shrink-0 px-4 py-2 rounded-lg text-xs font-medium border border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/15 disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {f.cost} $POCK
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </motion.section>
-      )}
-
-      {panel && panel !== "premium" && (
+      {/* Expanded forms right under buttons so taps clearly open UI */}
+      {panel && (panel === "gift" || panel === "send" || panel === "withdraw") && (
         <motion.section
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -589,10 +460,13 @@ export function WalletPanel({
 
           {panel === "gift" && (
             <>
-              <h3 className="text-sm font-medium text-white/70 flex items-center gap-1.5">
-                Gift credits
+              <h3 className="text-sm font-medium text-white/90 flex items-center gap-1.5">
+                Gift Credits
                 <GiftOneLinkTip variant="tip" />
               </h3>
+              <p className="text-xs text-neon-cyan/75 font-medium">
+                Sharing is caring
+              </p>
               <p className="text-xs text-white/40 leading-relaxed">
                 Send $POCK as a gift. Your recipient gets one private link — they
                 open it, create a free Genius Wallet, and the gift credits
@@ -731,34 +605,6 @@ export function WalletPanel({
             </>
           )}
 
-          {panel === "impact" && (
-            <>
-              <h3 className="text-sm font-medium text-white/70">
-                Impact options
-              </h3>
-              <p className="text-xs text-white/40">
-                Pledge $POCK to causes you care about. On-chain impact receipts
-                coming soon.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {IMPACT_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => setImpactId(opt.id)}
-                    className={`px-3 py-2 rounded-lg text-xs border transition-colors ${
-                      impactId === opt.id
-                        ? "border-neon-cyan/50 bg-neon-cyan/10 text-neon-cyan"
-                        : "border-white/10 text-white/55 hover:border-white/20"
-                    }`}
-                  >
-                    {opt.icon} {opt.name}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-
           {panel !== "gift" && (
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
             <label className="flex-1">
@@ -881,6 +727,44 @@ export function WalletPanel({
             </p>
           )}
         </motion.section>
+      )}
+
+      {/* Sync other devices — collapsed by default */}
+      <AccountRestorePanel defaultOpen={false} />
+
+      <NeoWalletProductsPanel featured={isGenius} />
+
+      <PockPriceTicker user={user} />
+
+      {isGenius && <CustodyStatusPanel />}
+
+      {isGenius && <GeniusSubWalletsPanel />}
+
+      <NeoWalletServicesPanel user={user} />
+
+      <PockOgClaimPanel />
+
+      {!user.subscription_active && user.subscription_tier !== "pock_og" && (
+        <section className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-xs text-white/55 space-y-1">
+          <p className="font-medium text-white/75">Free tier</p>
+          <p>{FREE_TIER_COPY.label}</p>
+          <p>
+            Additional reports: {FREE_TIER_BENEFITS.historyPreviewEntries}{" "}
+            preview entries in trends · subscribe to save full history.
+          </p>
+        </section>
+      )}
+
+      {user.subscription_tier === "premium" && (
+        <section className="rounded-xl border border-neon-cyan/20 bg-neon-cyan/5 px-4 py-3 text-xs text-white/60 space-y-1">
+          <p className="font-medium text-neon-cyan/90">Pro prize eligibility</p>
+          <p>
+            {PREMIUM_PRIZE_POOL_POCK.toLocaleString()} $POCK pool for largest
+            verified chrono − BROK bio-age delta. Winners may need notarized or
+            third-party lab validation; names and rankings may be published
+            promotionally.
+          </p>
+        </section>
       )}
 
       <TransactionHistorySection />

@@ -21,7 +21,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 function GeniusWalletContent() {
-  const { configured, ready, loading, createAccount, refresh, user } = usePock();
+  const { configured, ready, loading, refresh, user } = usePock();
   const searchParams = useSearchParams();
   const claimToken = searchParams.get("claim");
   const purchased = searchParams.get("purchased") === "1";
@@ -31,11 +31,7 @@ function GeniusWalletContent() {
   const [syncingPurchase, setSyncingPurchase] = useState(false);
   const [creditedPock, setCreditedPock] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (configured && !ready && !loading) {
-      void createAccount();
-    }
-  }, [configured, ready, loading, createAccount]);
+  // No auto createAccount — WalletOnboardingGate handles “I’m new” vs PIN restore.
 
   useEffect(() => {
     if (!topup) return;

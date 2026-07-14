@@ -30,7 +30,10 @@ import {
 } from "@/lib/brokTopicRouting";
 import { fetchGrokipediaRonaldIngram } from "@/lib/grokipedia";
 import { buildMarketPricesKnowledgeBlock } from "@/lib/marketPrices";
-import { buildRonaldIngramXKnowledgeBlock } from "@/lib/ronaldIngramX";
+import {
+  buildRonaldIngramXKnowledgeBlock,
+  shouldInjectFounderXFeed,
+} from "@/lib/ronaldIngramX";
 import { wantsDetailedAnswer } from "@/lib/spokenText";
 import { NextResponse } from "next/server";
 
@@ -175,11 +178,8 @@ export async function POST(req: Request) {
     );
     if (prices) parts.push(prices);
 
-    // Founder X feed for $POCK / markets / Ronald / "latest" — includes most-relevant tweet link
-    if (
-      marketOrProgress ||
-      /\bpock\b|\$pock|neobanx|ronald/i.test(message)
-    ) {
+    // Founder X feed: $POCK/BROK/Neobanx + geopolitics, banking, biohack, forecasts, etc.
+    if (marketOrProgress || shouldInjectFounderXFeed(message)) {
       const xFeed = await buildRonaldIngramXKnowledgeBlock(message).catch(
         () => null
       );

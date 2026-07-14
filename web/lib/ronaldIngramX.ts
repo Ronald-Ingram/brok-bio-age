@@ -1,6 +1,7 @@
 /**
  * Live + proprietary founder feed from @RonaldIngram on X.
- * Used for $POCK progress/community so BROK is not trapped in static Canon.
+ * Covers $POCK / BROK / Neobanx news plus geopolitics, forecasts, banking, biohacking, etc.
+ * Prefer X_BEARER_TOKEN (or TWITTER_BEARER_TOKEN) for reliable timeline sync.
  */
 
 import { getServiceSupabase } from "./supabase/server";
@@ -44,6 +45,48 @@ export type FounderPost = {
   url?: string | null;
 };
 
+export function xApiConfigured(): boolean {
+  return Boolean(
+    process.env.X_BEARER_TOKEN?.trim() ||
+      process.env.TWITTER_BEARER_TOKEN?.trim()
+  );
+}
+
+function getXBearerToken(): string {
+  return (
+    process.env.X_BEARER_TOKEN?.trim() ||
+    process.env.TWITTER_BEARER_TOKEN?.trim() ||
+    ""
+  );
+}
+
+/**
+ * Inject founder X feed when the user asks about products, founder views,
+ * or topics Ronald posts about (geo, banking, biohack, forecasts, etc.).
+ */
+export function shouldInjectFounderXFeed(message: string): boolean {
+  const m = message.trim();
+  if (!m) return false;
+  return (
+    /\b(pock|\$pock|neobanx|brok|ronald|ingram|exodus|jupiter|launch|soft\s*launch)\b/i.test(
+      m
+    ) ||
+    /\b(progress|latest|update|community|roadmap|milestone|development|news|announce)\b/i.test(
+      m
+    ) ||
+    /\b(geopolitic|geopolitics|forecast|future|singularity|banking|banker|debt|opm|leverage|bitcoin|btc|defi|cbdc)\b/i.test(
+      m
+    ) ||
+    /\b(bio[- ]?hack|biohack|healthspan|longevity|phenoage|bio[- ]?age)\b/i.test(
+      m
+    ) ||
+    /\b(what did (you|ronald|he) (post|tweet|say)|your (last|latest) (post|tweet)|from (your )?x\b|on x\.com)\b/i.test(
+      m
+    ) ||
+    /\b(financial literacy|wealth|budget|dave\s*ramsey|austerity)\b/i.test(m)
+  );
+}
+
 function formatFeedBlock(posts: FounderPost[], sourceNote: string): string {
   if (!posts.length) return "";
   const lines = posts.map((p, i) => {
@@ -55,9 +98,10 @@ function formatFeedBlock(posts: FounderPost[], sourceNote: string): string {
   });
   return `FOUNDER X FEED @${RONALD_INGRAM_HANDLE} (${RONALD_INGRAM_X_URL})
 Source: ${sourceNote}
-These are REAL recent posts with permalinks — primary public narrative for $POCK progress, community, soft launch, Neobanx updates.
+These are REAL recent posts with permalinks — primary public narrative for:
+$POCK / BROK / Neobanx news; geopolitics; future forecasts; banking & money; biohacking / healthspan; contrarian wealth strategy; community updates.
 
-CITATION RULE: When a post is relevant, include its full https://x.com/.../status/... LINK in the user-visible answer (markdown or plain URL). Pick the single most relevant post when the user asks for "the tweet" or a specific update. Do NOT invent post URLs.
+CITATION RULE: When a post is relevant, include its full https://x.com/.../status/... LINK in the user-visible text answer. For spoken/voice output, say "see link" — never spell URLs character-by-character. Pick the single most relevant post when the user asks for "the tweet" or a specific update. Do NOT invent post URLs. Prefer this feed over stale guesses for "latest" questions.
 
 ${lines.join("\n\n")}`;
 }
@@ -78,8 +122,26 @@ export function pickMostRelevantFounderPost(
     for (const w of words) {
       if (t.includes(w)) score += 2;
     }
-    if (/\bpock\b|jupiter|launch|soft\s*launch|brok|bio-?age|iem/i.test(t)) {
+    if (
+      /\bpock\b|jupiter|launch|soft\s*launch|brok|bio-?age|iem|exodus|neobanx/i.test(
+        t
+      )
+    ) {
       score += 1;
+    }
+    if (
+      /\b(geopolitic|forecast|bank|debt|bitcoin|biohack|longevity|singularity|opm|leverage)\b/i.test(
+        t
+      )
+    ) {
+      score += 1;
+    }
+    // Prefer newer posts slightly when scores tie-ish
+    if (p.posted_at) {
+      const ageDays =
+        (Date.now() - new Date(p.posted_at).getTime()) / (86400 * 1000);
+      if (ageDays < 3) score += 1.5;
+      else if (ageDays < 14) score += 0.5;
     }
     if (p.url) score += 0.5;
     if (score > bestScore) {
@@ -90,7 +152,7 @@ export function pickMostRelevantFounderPost(
   return best;
 }
 
-async function loadCachedPosts(limit = 20): Promise<FounderPost[]> {
+async function loadCachedPosts(limit = 40): Promise<FounderPost[]> {
   try {
     const supabase = getServiceSupabase();
     const { data } = await supabase
@@ -120,10 +182,13 @@ export async function upsertFounderPosts(
   for (const p of posts) {
     const content = p.content?.trim();
     if (!content) continue;
+    // Skip unstable jina-only ids that thrash the table
     const post_id =
       p.post_id ||
       p.url?.match(/status\/(\d+)/)?.[1] ||
       `hash_${Buffer.from(content.slice(0, 80)).toString("base64url").slice(0, 24)}`;
+    if (String(post_id).startsWith("jina_")) continue;
+
     const { error } = await supabase.from("brok_founder_x_feed").upsert(
       {
         post_id,
@@ -143,7 +208,7 @@ export async function upsertFounderPosts(
 
 /**
  * Fetch public timeline text via Jina reader (no X API key required).
- * Falls back silently.
+ * Fallback only — prefer X API for full coverage.
  */
 async function fetchViaJina(): Promise<FounderPost[]> {
   try {
@@ -159,23 +224,12 @@ async function fetchViaJina(): Promise<FounderPost[]> {
     );
     if (!res.ok) return [];
     const text = await res.text();
-    // Split into rough tweet-sized chunks from the plain text dump.
     const chunks = text
       .split(/\n{2,}/)
       .map((c) => c.replace(/\s+/g, " ").trim())
-      .filter((c) => c.length > 40 && c.length < 800)
-      .filter(
-        (c) =>
-          !/sign in|sign up|cookie|javascript|enable/i.test(c) &&
-          (c.includes("$POCK") ||
-            c.includes("POCK") ||
-            c.includes("BROK") ||
-            c.includes("Neobanx") ||
-            c.includes("launch") ||
-            c.includes("Jupiter") ||
-            c.length > 80)
-      )
-      .slice(0, 12);
+      .filter((c) => c.length > 40 && c.length < 1200)
+      .filter((c) => !/sign in|sign up|cookie|javascript|enable/i.test(c))
+      .slice(0, 20);
     return chunks.map((content, i) => ({
       post_id: `jina_${Date.now()}_${i}`,
       posted_at: null,
@@ -187,16 +241,16 @@ async function fetchViaJina(): Promise<FounderPost[]> {
   }
 }
 
-/** Official X API v2 if bearer token present. */
+/**
+ * Official X API v2 user timeline.
+ * Paginates up to ~100 recent original posts (excludes pure retweets so your
+ * views on geo/banking/biohack/$POCK stay in the feed).
+ */
 async function fetchViaXApi(): Promise<FounderPost[]> {
-  const token =
-    process.env.X_BEARER_TOKEN?.trim() ||
-    process.env.TWITTER_BEARER_TOKEN?.trim() ||
-    "";
+  const token = getXBearerToken();
   if (!token) return [];
 
   try {
-    // Resolve user id
     const uRes = await fetch(
       `https://api.twitter.com/2/users/by/username/${RONALD_INGRAM_HANDLE}`,
       {
@@ -204,29 +258,54 @@ async function fetchViaXApi(): Promise<FounderPost[]> {
         signal: AbortSignal.timeout(10_000),
       }
     );
-    if (!uRes.ok) return [];
+    if (!uRes.ok) {
+      console.error("X API user lookup failed", uRes.status, await uRes.text());
+      return [];
+    }
     const uJson = (await uRes.json()) as { data?: { id?: string } };
     const userId = uJson.data?.id;
     if (!userId) return [];
 
-    const tRes = await fetch(
-      `https://api.twitter.com/2/users/${userId}/tweets?max_results=15&tweet.fields=created_at,text&exclude=retweets,replies`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(10_000),
+    const collected: FounderPost[] = [];
+    let paginationToken: string | undefined;
+    // Up to 2 pages × 50 = 100 tweets
+    for (let page = 0; page < 2; page++) {
+      const params = new URLSearchParams({
+        max_results: "50",
+        "tweet.fields": "created_at,text",
+        exclude: "retweets",
+      });
+      if (paginationToken) params.set("pagination_token", paginationToken);
+
+      const tRes = await fetch(
+        `https://api.twitter.com/2/users/${userId}/tweets?${params}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(12_000),
+        }
+      );
+      if (!tRes.ok) {
+        console.error("X API tweets failed", tRes.status, await tRes.text());
+        break;
       }
-    );
-    if (!tRes.ok) return [];
-    const tJson = (await tRes.json()) as {
-      data?: { id: string; text: string; created_at?: string }[];
-    };
-    return (tJson.data ?? []).map((t) => ({
-      post_id: t.id,
-      posted_at: t.created_at ?? null,
-      content: t.text,
-      url: `https://x.com/${RONALD_INGRAM_HANDLE}/status/${t.id}`,
-    }));
-  } catch {
+      const tJson = (await tRes.json()) as {
+        data?: { id: string; text: string; created_at?: string }[];
+        meta?: { next_token?: string };
+      };
+      for (const t of tJson.data ?? []) {
+        collected.push({
+          post_id: t.id,
+          posted_at: t.created_at ?? null,
+          content: t.text,
+          url: `https://x.com/${RONALD_INGRAM_HANDLE}/status/${t.id}`,
+        });
+      }
+      paginationToken = tJson.meta?.next_token;
+      if (!paginationToken) break;
+    }
+    return collected;
+  } catch (e) {
+    console.error("X API fetch error", e);
     return [];
   }
 }
@@ -238,24 +317,30 @@ async function fetchViaXApi(): Promise<FounderPost[]> {
 export async function loadFounderPostsForChat(): Promise<{
   posts: FounderPost[];
   note: string;
+  xApiConfigured: boolean;
 }> {
+  const configured = xApiConfigured();
   let posts = await fetchViaXApi();
-  let note = "X API v2";
+  let note = configured ? "X API v2 @RonaldIngram timeline" : "X API not configured";
   if (!posts.length) {
     posts = await fetchViaJina();
-    note = "public timeline extract";
+    note = configured
+      ? "X API empty/error — public timeline extract"
+      : "public timeline extract (set X_BEARER_TOKEN for full coverage)";
   }
-  if (posts.length) {
-    void upsertFounderPosts(posts, note).catch(() => null);
+  if (posts.length && !note.includes("jina") && !note.includes("public")) {
+    void upsertFounderPosts(posts, "x_api").catch(() => null);
+  } else if (posts.length && note.includes("public")) {
+    // Don't thrash cache with jina_ ids; skip upsert
   } else {
-    posts = await loadCachedPosts(20);
+    posts = await loadCachedPosts(40);
     note = "proprietary cache (brok_founder_x_feed)";
   }
   if (!posts.length) {
     posts = FALLBACK_SNAPSHOT;
-    note = "embedded recent snapshot (refresh via admin Sync X feed)";
+    note = "embedded recent snapshot (admin Sync X feed or set X_BEARER_TOKEN)";
   }
-  return { posts, note };
+  return { posts, note, xApiConfigured: configured };
 }
 
 export async function buildRonaldIngramXKnowledgeBlock(
@@ -266,7 +351,7 @@ export async function buildRonaldIngramXKnowledgeBlock(
   if (question) {
     const best = pickMostRelevantFounderPost(posts, question);
     if (best?.url) {
-      block += `\n\nMOST RELEVANT POST FOR THIS QUESTION (cite this link in the answer):\n"${best.content.slice(0, 280)}${best.content.length > 280 ? "…" : ""}"\n${best.url}`;
+      block += `\n\nMOST RELEVANT POST FOR THIS QUESTION (cite this link in the answer; voice: say "see link"):\n"${best.content.slice(0, 400)}${best.content.length > 400 ? "…" : ""}"\n${best.url}`;
     }
   }
   return block;
@@ -276,10 +361,17 @@ export async function buildRonaldIngramXKnowledgeBlock(
 export async function syncFounderXFeed(manual?: FounderPost[]): Promise<{
   upserted: number;
   source: string;
+  xApiConfigured: boolean;
+  postCount: number;
 }> {
   if (manual?.length) {
     const n = await upsertFounderPosts(manual, "admin_manual");
-    return { upserted: n, source: "admin_manual" };
+    return {
+      upserted: n,
+      source: "admin_manual",
+      xApiConfigured: xApiConfigured(),
+      postCount: manual.length,
+    };
   }
   let posts = await fetchViaXApi();
   let source = "x_api";
@@ -291,6 +383,15 @@ export async function syncFounderXFeed(manual?: FounderPost[]): Promise<{
     posts = FALLBACK_SNAPSHOT;
     source = "snapshot_seed";
   }
-  const upserted = await upsertFounderPosts(posts, source);
-  return { upserted, source };
+  const upserted =
+    source === "jina"
+      ? 0 // avoid junk jina_ post_ids
+      : await upsertFounderPosts(posts, source);
+  // For jina, still return count but note no cache
+  return {
+    upserted: source === "jina" ? posts.length : upserted,
+    source,
+    xApiConfigured: xApiConfigured(),
+    postCount: posts.length,
+  };
 }

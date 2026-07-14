@@ -89,9 +89,36 @@ function brandPronunciationForSpeech(text: string): string {
     .replace(/\bK\s*[\.\- ]\s*I\s*[\.\- ]\s*R\s*[\.\- ]\s*O\s*[\.\- ]\s*N\b/gi, "Kiron");
 }
 
+/**
+ * URLs must not be spoken character-by-character.
+ * Markdown links → spoken label only; bare URLs → "see link".
+ */
+export function urlsForSpeech(text: string): string {
+  let t = text;
+  // [visible label](https://...) → "visible label, see link"
+  t = t.replace(
+    /\[([^\]]+)\]\(\s*https?:\/\/[^)\s]+\s*\)/gi,
+    (_m, label: string) => {
+      const clean = String(label).trim();
+      if (!clean || /^https?:\/\//i.test(clean)) return "see link";
+      return `${clean}, see link`;
+    }
+  );
+  // Bare http(s) URLs (and common www.)
+  t = t.replace(/\bhttps?:\/\/[^\s\]\)>"']+/gi, "see link");
+  t = t.replace(/\bwww\.[^\s\]\)>"']+/gi, "see link");
+  // Collapse "see link see link" / "see link, see link"
+  t = t.replace(/(?:see link\s*,?\s*){2,}/gi, "see link ");
+  // "See see link" / "see the see link" → natural phrasing
+  t = t.replace(/\bsee\s+see link\b/gi, "see link");
+  t = t.replace(/\b(see|view|open|visit|check)\s+(the\s+)?see link\b/gi, "see link");
+  return t;
+}
+
 /** Expand currency/units for TTS so million/billion are never dropped. */
 export function normalizeForSpeech(text: string): string {
-  let t = brokToBrock(text);
+  let t = urlsForSpeech(text);
+  t = brokToBrock(t);
   t = brandPronunciationForSpeech(t);
   t = t.replace(/\$(\d+(?:\.\d+)?)\s*([Tt]rillion)\b/g, "$1 $2 dollars");
   t = t.replace(/\$(\d+(?:\.\d+)?)\s*([Bb]illion)\b/g, "$1 $2 dollars");

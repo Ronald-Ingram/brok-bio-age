@@ -24,6 +24,9 @@ export async function GET(req: Request) {
   }
 
   const supabase = getServiceSupabase();
+  const now = Date.now();
+  const since24h = new Date(now - 24 * 3600 * 1000).toISOString();
+  const since7d = new Date(now - 7 * 24 * 3600 * 1000).toISOString();
 
   const [
     usersRes,
@@ -36,6 +39,12 @@ export async function GET(req: Request) {
     balancesRes,
     buybackRes,
     highIqAlertsRes,
+    users24hRes,
+    users7dRes,
+    trialLedgerRes,
+    deviceBindingsRes,
+    recentWalletsRes,
+    recentBindingsRes,
   ] = await Promise.all([
     supabase.from("brok_users").select("id", { count: "exact", head: true }),
     supabase
@@ -86,6 +95,36 @@ export async function GET(req: Request) {
         .in("user_id", ids)
         .eq("high_iq_alerted", false);
     })(),
+    supabase
+      .from("brok_users")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", since24h),
+    supabase
+      .from("brok_users")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", since7d),
+    // Recent trial credits (monitor free-credit minting / abuse)
+    supabase
+      .from("pock_ledger")
+      .select("user_id, amount, created_at, note")
+      .eq("kind", "trial_credit")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("brok_device_bindings")
+      .select("device_id", { count: "exact", head: true }),
+    supabase
+      .from("brok_users")
+      .select(
+        "id, pock_balance, trial_credited, account_reveal_password_hash, display_name, created_at, updated_at"
+      )
+      .order("created_at", { ascending: false })
+      .limit(40),
+    supabase
+      .from("brok_device_bindings")
+      .select("device_id, user_id, bound_at, bound_via")
+      .order("bound_at", { ascending: false })
+      .limit(200),
   ]);
 
   const ledger = ledgerRes.data ?? [];
@@ -170,9 +209,111 @@ export async function GET(req: Request) {
     outages.push(`${highIqPending} unanswered question(s) from High IQ? querents`);
   }
 
+  const trialRows = trialLedgerRes.data ?? [];
+  const trialIn24h = trialRows.filter(
+    (r) => new Date(r.created_at).getTime() >= now - 24 * 3600 * 1000
+  );
+  const trialIn7d = trialRows.filter(
+    (r) => new Date(r.created_at).getTime() >= now - 7 * 24 * 3600 * 1000
+  );
+  const sumAmt = (rows: { amount?: number | null }[]) =>
+    rows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+
+  // Recent bindings sample (up to 200) for device↔wallet listing + multi-device counts
+  const bindingSample = recentBindingsRes.data ?? [];
+  const bindingsByUser = new Map<string, number>();
+  for (const b of bindingSample) {
+    const uid = String(b.user_id);
+    bindingsByUser.set(uid, (bindingsByUser.get(uid) ?? 0) + 1);
+  }
+  // Each device_id is unique → one current wallet per device.
+  // usersWithMultipleDevices = wallets that have linked several browsers (sample window).
+  let usersWithMultipleDevices = 0;
+  let maxDevicesOnOneWallet = 0;
+  for (const n of bindingsByUser.values()) {
+    if (n > 1) usersWithMultipleDevices += 1;
+    if (n > maxDevicesOnOneWallet) maxDevicesOnOneWallet = n;
+  }
+
+  const recentWallets = (recentWalletsRes.data ?? []).map((u) => {
+    const id = String(u.id);
+    const compact = id.replace(/-/g, "").slice(0, 8).toUpperCase();
+    return {
+      code: `BROK-${compact}`,
+      userId: id,
+      balance: Number(u.pock_balance ?? 0),
+      trialCredited: Boolean(u.trial_credited),
+      hasPin: Boolean(u.account_reveal_password_hash),
+      deviceCount: bindingsByUser.get(id) ?? 0,
+      displayName: (u.display_name as string | null) ?? null,
+      createdAt: String(u.created_at),
+      updatedAt: String(u.updated_at),
+    };
+  });
+
+  const recentDevices = bindingSample.slice(0, 40).map((b) => {
+    const uid = String(b.user_id);
+    const compact = uid.replace(/-/g, "").slice(0, 8).toUpperCase();
+    const dev = String(b.device_id);
+    return {
+      deviceIdShort: `${dev.slice(0, 8)}…${dev.slice(-4)}`,
+      deviceId: dev,
+      userCode: `BROK-${compact}`,
+      userId: uid,
+      boundAt: String(b.bound_at),
+      boundVia: (b.bound_via as string | null) ?? null,
+    };
+  });
+
+  const walletsCreated24h = users24hRes.count ?? 0;
+  const trialCredits24h = trialIn24h.length;
+  // Soft alert: many new trial wallets in a day may mean storage-clear farming
+  if (trialCredits24h >= 25 || walletsCreated24h >= 30) {
+    outages.push(
+      `Elevated free-wallet rate: ${walletsCreated24h} wallets / ${trialCredits24h} trial credits in 24h — monitor abuse`
+    );
+  }
+
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
-    users: { total: usersRes.count ?? 0, subscribed: subsRes.count ?? 0 },
+    users: {
+      total: usersRes.count ?? 0,
+      subscribed: subsRes.count ?? 0,
+      created24h: walletsCreated24h,
+      created7d: users7dRes.count ?? 0,
+    },
+    walletCreation: {
+      note:
+        "Each new browser identity can mint one trial (+100 $POCK). Clearing site data creates a new device id → new wallet. Not permanent free credit policy — monitor only.",
+      walletsTotal: usersRes.count ?? 0,
+      walletsCreated24h,
+      walletsCreated7d: users7dRes.count ?? 0,
+      trialCredits24h,
+      trialCredits7d: trialIn7d.length,
+      trialPock24h: sumAmt(trialIn24h),
+      trialPock7d: sumAmt(trialIn7d),
+      // Sample window from last 200 trial_credit rows (not full history if older)
+      trialCreditsSampled: trialRows.length,
+      trialPockSampled: sumAmt(trialRows),
+      deviceBindingsTotal: deviceBindingsRes.count ?? 0,
+      usersWithMultipleDevices,
+      maxDevicesOnOneWallet,
+      /** 1:1 today: one browser device_id binds to one wallet at a time */
+      avgWalletsPerBoundDevice: 1,
+      recentWallets,
+      recentDevices,
+      recentTrialCredits: trialIn7d.slice(0, 25).map((r) => {
+        const uid = String(r.user_id);
+        const compact = uid.replace(/-/g, "").slice(0, 8).toUpperCase();
+        return {
+          code: `BROK-${compact}`,
+          userId: uid,
+          amount: Number(r.amount ?? 0),
+          at: String(r.created_at),
+          note: (r.note as string | null) ?? null,
+        };
+      }),
+    },
     pock: {
       corpFloat: corpRes.data?.float_remaining ?? null,
       corpAllocated: corpRes.data?.float_allocated ?? null,

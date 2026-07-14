@@ -17,7 +17,7 @@ export interface BrokPageContextPayload {
 const ROUTE_CATALOG: Record<string, { title: string; summary: string }> = {
   "/": {
     title: "BROK Home",
-    summary: `Landing: ${NORTH_STAR} ${BROK_IN_EVERY_POCKET} Pricing: Essential ~~$29~~ $9/mo, Pro ~~$79~~ $49/mo (${PRELAUNCH_LABEL}). CTAs: Genius Wallet, Bio-Age, Inneagram, Chat. ${LAUNCH_DATE_LABEL}.`,
+    summary: `Landing: ${NORTH_STAR} ${BROK_IN_EVERY_POCKET} Capabilities now vs coming soon; FTEP KPI; use cases; About BROK & Ronald Ingram. Pricing: Essential ~~$29~~ $9/mo, Pro ~~$79~~ $49/mo (${PRELAUNCH_LABEL}). CTAs: Genius Wallet, Chat, Bio-Age, Inneagram. ${LAUNCH_DATE_LABEL}.`,
   },
   "/genius-wallet": {
     title: "Genius Wallet",

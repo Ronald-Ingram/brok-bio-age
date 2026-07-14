@@ -25,7 +25,54 @@ import { adminAuthHeaders } from "@/lib/adminAuthClient";
 
 interface DashboardData {
   generatedAt: string;
-  users: { total: number; subscribed: number };
+  users: {
+    total: number;
+    subscribed: number;
+    created24h?: number;
+    created7d?: number;
+  };
+  walletCreation?: {
+    note: string;
+    walletsTotal: number;
+    walletsCreated24h: number;
+    walletsCreated7d: number;
+    trialCredits24h: number;
+    trialCredits7d: number;
+    trialPock24h: number;
+    trialPock7d: number;
+    trialCreditsSampled: number;
+    trialPockSampled: number;
+    deviceBindingsTotal: number;
+    usersWithMultipleDevices: number;
+    maxDevicesOnOneWallet: number;
+    avgWalletsPerBoundDevice: number;
+    recentWallets: {
+      code: string;
+      userId: string;
+      balance: number;
+      trialCredited: boolean;
+      hasPin: boolean;
+      deviceCount: number;
+      displayName: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }[];
+    recentDevices: {
+      deviceIdShort: string;
+      deviceId: string;
+      userCode: string;
+      userId: string;
+      boundAt: string;
+      boundVia: string | null;
+    }[];
+    recentTrialCredits: {
+      code: string;
+      userId: string;
+      amount: number;
+      at: string;
+      note: string | null;
+    }[];
+  };
   pock: {
     corpFloat: number | null;
     corpAllocated?: number | null;
@@ -202,7 +249,192 @@ export default function AdminPage() {
               label="Product usage (recent)"
               value={`${data.pock.calcEvents} calcs · ${data.pock.meterUsageEvents} meter · ${data.pock.stripeTopUps} top-ups`}
             />
+            {data.walletCreation && (
+              <>
+                <StatCard
+                  icon={Users}
+                  label="Wallets created"
+                  value={`${data.walletCreation.walletsCreated24h} / 24h · ${data.walletCreation.walletsCreated7d} / 7d`}
+                />
+                <StatCard
+                  icon={Coins}
+                  label="Trial credits (+100)"
+                  value={`${data.walletCreation.trialCredits24h} / 24h · ${data.walletCreation.trialPock24h.toLocaleString()} $POCK`}
+                />
+              </>
+            )}
           </div>
+
+          {data.walletCreation && (
+            <section className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-4 space-y-4">
+              <h2 className="text-sm font-medium text-white/85 flex items-center gap-2">
+                <Users className="w-4 h-4 text-amber-300" />
+                Wallet creation & free trial monitor
+              </h2>
+              <p className="text-xs text-white/50 leading-relaxed">
+                {data.walletCreation.note}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2 text-xs">
+                <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                  <span className="text-white/40 block">Total wallets</span>
+                  <span className="text-white/85 font-semibold tabular-nums">
+                    {data.walletCreation.walletsTotal.toLocaleString()}
+                  </span>
+                </p>
+                <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                  <span className="text-white/40 block">Device bindings</span>
+                  <span className="text-white/85 font-semibold tabular-nums">
+                    {data.walletCreation.deviceBindingsTotal.toLocaleString()}
+                  </span>
+                  <span className="text-white/35 block mt-0.5">
+                    ~{data.walletCreation.avgWalletsPerBoundDevice} wallet per
+                    bound device (current model)
+                  </span>
+                </p>
+                <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                  <span className="text-white/40 block">Trial $POCK (7d)</span>
+                  <span className="text-amber-200/90 font-semibold tabular-nums">
+                    {data.walletCreation.trialCredits7d} events ·{" "}
+                    {data.walletCreation.trialPock7d.toLocaleString()} $POCK
+                  </span>
+                </p>
+                <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                  <span className="text-white/40 block">Multi-device wallets</span>
+                  <span className="text-white/85 font-semibold tabular-nums">
+                    {data.walletCreation.usersWithMultipleDevices} wallets
+                  </span>
+                  <span className="text-white/35 block mt-0.5">
+                    max {data.walletCreation.maxDevicesOnOneWallet} devices on
+                    one account (sample)
+                  </span>
+                </p>
+              </div>
+
+              {data.walletCreation.recentWallets.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-white/70">
+                    Recent wallets created
+                  </h3>
+                  <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                    <table className="w-full text-[11px] text-left">
+                      <thead className="sticky top-0 bg-bg-card">
+                        <tr className="text-white/35 border-b border-white/10">
+                          <th className="py-2 pr-2">When</th>
+                          <th className="py-2 pr-2">Code</th>
+                          <th className="py-2 pr-2">Balance</th>
+                          <th className="py-2 pr-2">PIN</th>
+                          <th className="py-2 pr-2">Devices</th>
+                          <th className="py-2">Trial</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-white/55">
+                        {data.walletCreation.recentWallets.map((w) => (
+                          <tr key={w.userId} className="border-b border-white/5">
+                            <td className="py-1.5 pr-2 whitespace-nowrap">
+                              {new Date(w.createdAt).toLocaleString()}
+                            </td>
+                            <td className="py-1.5 pr-2 font-mono text-neon-cyan/80">
+                              {w.code}
+                            </td>
+                            <td className="py-1.5 pr-2 tabular-nums">
+                              {w.balance.toLocaleString()}
+                            </td>
+                            <td className="py-1.5 pr-2">
+                              {w.hasPin ? "yes" : "—"}
+                            </td>
+                            <td className="py-1.5 pr-2 tabular-nums">
+                              {w.deviceCount}
+                            </td>
+                            <td className="py-1.5">
+                              {w.trialCredited ? "yes" : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {data.walletCreation.recentDevices.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-white/70">
+                    Recent device → wallet bindings
+                  </h3>
+                  <div className="overflow-x-auto max-h-48 overflow-y-auto">
+                    <table className="w-full text-[11px] text-left">
+                      <thead className="sticky top-0 bg-bg-card">
+                        <tr className="text-white/35 border-b border-white/10">
+                          <th className="py-2 pr-2">Bound</th>
+                          <th className="py-2 pr-2">Device</th>
+                          <th className="py-2 pr-2">Wallet</th>
+                          <th className="py-2">Via</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-white/55">
+                        {data.walletCreation.recentDevices.map((d) => (
+                          <tr
+                            key={`${d.deviceId}-${d.boundAt}`}
+                            className="border-b border-white/5"
+                          >
+                            <td className="py-1.5 pr-2 whitespace-nowrap">
+                              {new Date(d.boundAt).toLocaleString()}
+                            </td>
+                            <td className="py-1.5 pr-2 font-mono text-white/40">
+                              {d.deviceIdShort}
+                            </td>
+                            <td className="py-1.5 pr-2 font-mono text-neon-cyan/80">
+                              {d.userCode}
+                            </td>
+                            <td className="py-1.5 text-white/40">
+                              {d.boundVia ?? "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {data.walletCreation.recentTrialCredits.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-medium text-white/70">
+                    Recent trial credits (7d)
+                  </h3>
+                  <div className="overflow-x-auto max-h-40 overflow-y-auto">
+                    <table className="w-full text-[11px] text-left">
+                      <thead className="sticky top-0 bg-bg-card">
+                        <tr className="text-white/35 border-b border-white/10">
+                          <th className="py-2 pr-2">When</th>
+                          <th className="py-2 pr-2">Wallet</th>
+                          <th className="py-2">$POCK</th>
+                        </tr>
+                      </thead>
+                      <tbody className="text-white/55">
+                        {data.walletCreation.recentTrialCredits.map((t, i) => (
+                          <tr
+                            key={`${t.userId}-${t.at}-${i}`}
+                            className="border-b border-white/5"
+                          >
+                            <td className="py-1.5 pr-2 whitespace-nowrap">
+                              {new Date(t.at).toLocaleString()}
+                            </td>
+                            <td className="py-1.5 pr-2 font-mono text-neon-cyan/80">
+                              {t.code}
+                            </td>
+                            <td className="py-1.5 tabular-nums text-amber-200/80">
+                              +{t.amount}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="rounded-xl border border-white/10 bg-bg-card p-4 space-y-3">
             <h2 className="text-sm font-medium text-white/80 flex items-center gap-2">

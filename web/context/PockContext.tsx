@@ -48,6 +48,8 @@ interface PockContextValue {
   ledger: PockLedgerEntry[];
   loading: boolean;
   ready: boolean;
+  /** True when browser has no wallet yet — show “I’m new” / “I already have a wallet”. */
+  needsWalletChoice: boolean;
   configured: boolean;
   reconciling: boolean;
   reconcile: PockReconcileResult | null;
@@ -103,6 +105,7 @@ export function PockProvider({ children }: { children: ReactNode }) {
   const [ledger, setLedger] = useState<PockLedgerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
+  const [needsWalletChoice, setNeedsWalletChoice] = useState(false);
   const [reconciling, setReconciling] = useState(false);
   const [reconcile, setReconcile] = useState<PockReconcileResult | null>(null);
   const [accountIdRevealed, setAccountIdRevealedState] = useState(false);
@@ -137,7 +140,9 @@ export function PockProvider({ children }: { children: ReactNode }) {
         const [u, l] = await Promise.all([fetchCurrentUser(), fetchLedger()]);
         setUser(u);
         setLedger(l);
-        setReady(Boolean(u?.trial_credited));
+        const hasWallet = Boolean(u?.trial_credited);
+        setReady(hasWallet);
+        setNeedsWalletChoice(!hasWallet);
         await syncRevealState(u);
       } catch (e) {
         console.error("POCK refresh failed:", e);
@@ -212,33 +217,36 @@ export function PockProvider({ children }: { children: ReactNode }) {
               undefined
             : undefined;
 
+        // Do NOT auto-bootstrap trial wallets. Returning browsers that lost
+        // storage must choose “I already have a wallet” (PIN) or “I’m new”.
         const existing = await fetchCurrentUser();
-        if (!existing?.trial_credited) {
-          try {
-            const { user: booted, credited } = await bootstrapUser();
-            setUser(booted);
-            setReady(true);
-            if (credited) {
-              showToast("🎁 100 $POCK credited!", "success");
-            }
-          } catch (bootErr) {
-            console.error("POCK auto-bootstrap failed:", bootErr);
-          }
-        } else {
-          const [u, l] = await Promise.all([fetchCurrentUser(), fetchLedger()]);
+        if (existing?.trial_credited) {
+          const [u, l] = await Promise.all([
+            fetchCurrentUser(),
+            fetchLedger(),
+          ]);
           setUser(u);
           setLedger(l);
-          setReady(Boolean(u?.trial_credited));
+          setReady(true);
+          setNeedsWalletChoice(false);
+          await syncRevealState(u);
+        } else {
+          setUser(existing);
+          setReady(false);
+          setNeedsWalletChoice(true);
         }
 
         setLoading(false);
-        void refresh({ sessionId });
+        if (existing?.trial_credited) {
+          void refresh({ sessionId });
+        }
       } catch (e) {
         console.error("POCK init failed:", e);
+        setNeedsWalletChoice(true);
         setLoading(false);
       }
     })();
-  }, [configured, refresh, showToast]);
+  }, [configured, refresh, syncRevealState]);
 
   useEffect(() => {
     if (!configured || !ready || !user) return;
@@ -288,9 +296,10 @@ export function PockProvider({ children }: { children: ReactNode }) {
       const { user: u, credited } = await bootstrapUser();
       setUser(u);
       setReady(true);
+      setNeedsWalletChoice(false);
       await refresh();
       if (credited) {
-        showToast("🎁 100 $POCK credited!", "success");
+        showToast("Welcome — 100 $POCK trial credited.", "success");
       } else {
         showToast("Welcome back!", "info");
       }
@@ -310,7 +319,7 @@ export function PockProvider({ children }: { children: ReactNode }) {
       }
       throw e;
     }
-  }, [configured, showToast]);
+  }, [configured, showToast, refresh]);
 
   const debitCalc = useCallback(async (): Promise<DebitCalcResult> => {
     try {
@@ -478,6 +487,7 @@ export function PockProvider({ children }: { children: ReactNode }) {
         ledger,
         loading,
         ready,
+        needsWalletChoice,
         configured,
         reconciling,
         reconcile,

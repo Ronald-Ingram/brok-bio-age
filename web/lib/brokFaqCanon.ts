@@ -124,8 +124,15 @@ export const BROK_FAQ_ITEMS: BrokFaqItem[] = [
     id: "faq_balance_after_merge",
     question: "Why did my balance jump after Switch account?",
     answer:
-      "When you open your main account from a temporary trial wallet, leftover $POCK on that trial can merge into the main balance. The new total should match main + what was on the temporary wallet (ledger shows a merge / transfer). Transaction history follows the main account.",
+      "When you open your main account from a temporary trial wallet, leftover $POCK on that trial can merge into the main balance. The new total should match main + what was on the temporary wallet (ledger shows a merge / transfer). Transaction history follows the main account. Extra trial merges during beta are fine to keep as a tester reward.",
     tags: ["account", "balance", "merge", "ledger"],
+  },
+  {
+    id: "faq_iphone_new_wallet",
+    question: "My iPhone opened a new empty wallet but Mac is fine — what happened?",
+    answer:
+      "Not a system-wide wipe. Genius Wallet remembers which account this browser is on using site storage (and a cookie). iPhone Safari can clear that after security/privacy changes, “Clear History and Website Data,” Lockdown Mode, or some iOS updates — so the phone looks like a brand-new visitor and gets a temporary +100 $POCK trial. Mac still has its storage, so it stays on the real account.\n\nFix: Switch account → your BROK- code + Device PIN. Leftover trial $POCK merges into main. Re-enable Face ID / biometrics for phone security if you want — that does not cause the reset; clearing website data does. This only hits browsers that lost site data for brok.neobanx.com — not every iPhone automatically.",
+    tags: ["account", "iphone", "ios", "safari", "device", "trial"],
   },
   {
     id: "faq_contact_brok",
