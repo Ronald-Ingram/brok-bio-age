@@ -4,6 +4,7 @@ import {
   HeyGenLiveAvatar,
   type HeyGenLiveAvatarHandle,
 } from "@/components/HeyGenLiveAvatar";
+import { BusinessCanvasPanel } from "@/components/BusinessCanvasPanel";
 import { InneagramPanel } from "@/components/InneagramPanel";
 import { IemReportModal } from "@/components/IemReportModal";
 import { sanitizeBrokAvatarError } from "@/lib/brokAvatarErrors";
@@ -20,6 +21,7 @@ import { MAX_ATTACHMENTS } from "@/lib/brokFileIngest";
 import {
   BarChart3,
   FileUp,
+  LayoutGrid,
   Sparkles,
   Loader2,
   Mic,
@@ -43,6 +45,35 @@ type ChatTurn = {
 };
 
 const threadStorageKey = (userId: string) => `brok_thread_id:${userId}`;
+
+/** Browser STT (Chrome/Edge/Safari partial) — input only; TTS stays Cartesia/XTTS/Avatar. */
+type BrowserSpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((ev: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
+};
+
+function getSpeechRecognitionCtor():
+  | (new () => BrowserSpeechRecognition)
+  | null {
+  if (typeof window === "undefined") return null;
+  const w = window as Window & {
+    SpeechRecognition?: new () => BrowserSpeechRecognition;
+    webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
+  };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
+}
 
 interface BrokStatus {
   brokApi: boolean;
@@ -97,6 +128,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [iemReportLoading, setIemReportLoading] = useState(false);
   const [iemReport, setIemReport] = useState<IemReportPayload | null>(null);
   const [inneagramOpen, setInneagramOpen] = useState(false);
+  const [canvasOpen, setCanvasOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [voiceOn, setVoiceOn] = useState(true);
   const [avatarOn, setAvatarOn] = useState(false);
@@ -104,9 +136,108 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [speakProgress, setSpeakProgress] = useState<string | null>(null);
   const [lastUserMessage, setLastUserMessage] = useState("");
   const [lastModel, setLastModel] = useState<string | null>(null);
+  const [listening, setListening] = useState(false);
+  const [sttSupported, setSttSupported] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
+  /** Text committed before this listen session (so interim can replace freely). */
+  const sttBaseRef = useRef("");
 
   const useHeyGenLive = Boolean(avatarOn && status?.heygen);
+
+  useEffect(() => {
+    setSttSupported(Boolean(getSpeechRecognitionCtor()));
+    return () => {
+      try {
+        recognitionRef.current?.abort();
+      } catch {
+        /* ignore */
+      }
+      recognitionRef.current = null;
+    };
+  }, []);
+
+  const stopListening = useCallback(() => {
+    try {
+      recognitionRef.current?.stop();
+    } catch {
+      /* ignore */
+    }
+    setListening(false);
+  }, []);
+
+  const toggleListen = useCallback(() => {
+    const Ctor = getSpeechRecognitionCtor();
+    if (!Ctor) {
+      setError(
+        "Voice input needs a browser that supports speech recognition (Chrome or Edge work best). On iPhone Safari support is limited — try Chrome if available."
+      );
+      return;
+    }
+
+    if (listening) {
+      stopListening();
+      return;
+    }
+
+    setError(null);
+    sttBaseRef.current = message.trim();
+    const rec = new Ctor();
+    recognitionRef.current = rec;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = "en-US";
+
+    rec.onresult = (ev: SpeechRecognitionEventLike) => {
+      let interim = "";
+      let finalChunk = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const piece = ev.results[i]![0]?.transcript ?? "";
+        if (ev.results[i]!.isFinal) finalChunk += piece;
+        else interim += piece;
+      }
+      if (finalChunk) {
+        const base = sttBaseRef.current;
+        sttBaseRef.current = base
+          ? `${base}${base.endsWith(" ") ? "" : " "}${finalChunk.trim()}`
+          : finalChunk.trim();
+      }
+      const live = interim.trim();
+      const committed = sttBaseRef.current;
+      setMessage(
+        live
+          ? committed
+            ? `${committed}${committed.endsWith(" ") ? "" : " "}${live}`
+            : live
+          : committed
+      );
+    };
+
+    rec.onerror = (ev) => {
+      const code = ev.error ?? "unknown";
+      if (code === "not-allowed" || code === "service-not-allowed") {
+        setError(
+          "Microphone permission blocked — allow mic access for this site and try again."
+        );
+      } else if (code !== "aborted" && code !== "no-speech") {
+        setError(`Voice input error (${code}). Try again or type instead.`);
+      }
+      setListening(false);
+    };
+
+    rec.onend = () => {
+      setListening(false);
+      recognitionRef.current = null;
+    };
+
+    try {
+      rec.start();
+      setListening(true);
+    } catch {
+      setError("Could not start microphone — try again or type your message.");
+      setListening(false);
+    }
+  }, [listening, message, stopListening]);
 
   // Stable callbacks so HeyGenLiveAvatar does not reconnect-loop every render.
   const handleAvatarError = useCallback((msg: string) => {
@@ -206,11 +337,20 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     }
   };
 
-  /** Spoken narrative = full on-screen answer (TTS length cap only). No 2-sentence teaser. */
-  const speechPayload = (text: string, _userMessage: string) => {
+  /**
+   * When Voice and/or Avatar are ON, speak the full on-screen answer (demos + UX).
+   * Text still defaults shorter from the model; fullLength speech only when toggles are on
+   * or the user explicitly asked for a full-length read.
+   */
+  const speechPayload = (text: string, userMessage: string) => {
+    const full =
+      voiceOn ||
+      avatarOn ||
+      useHeyGenLive ||
+      wantsFullLengthSpeech(userMessage);
     return {
-      text: spokenExcerpt(text, { fullLength: true }),
-      fullLength: true,
+      text: spokenExcerpt(text, { fullLength: full }),
+      fullLength: full,
     };
   };
 
@@ -699,18 +839,66 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           </div>
         )}
 
-        <label className="block space-y-1.5 flex-1">
-          <span className="text-xs uppercase tracking-wider text-white/40">
-            Message
-          </span>
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            rows={4}
-            placeholder="Ask BROK anything — deal review, IEM scoring, strategy, bio-age…"
-            className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-sm resize-y min-h-[100px] focus:border-neon-cyan/40 outline-none"
-          />
-        </label>
+        <div className="block space-y-1.5 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs uppercase tracking-wider text-white/40">
+              Message
+            </span>
+            {listening && (
+              <span className="text-[10px] text-neon-cyan animate-pulse">
+                Listening… tap mic to stop, then Send
+              </span>
+            )}
+          </div>
+          <div className="flex gap-2 items-stretch">
+            <button
+              type="button"
+              onClick={() => void toggleListen()}
+              disabled={loading}
+              title={
+                sttSupported
+                  ? listening
+                    ? "Stop listening"
+                    : "Speak instead of typing — fills the message box"
+                  : "Voice input not supported in this browser — use Chrome or Edge"
+              }
+              aria-label={listening ? "Stop voice input" : "Start voice input"}
+              aria-pressed={listening}
+              className={`shrink-0 inline-flex items-center justify-center w-12 rounded-xl border transition-colors ${
+                listening
+                  ? "border-neon-cyan/60 bg-neon-cyan/20 text-neon-cyan"
+                  : sttSupported
+                    ? "border-white/15 bg-black/30 text-white/70 hover:border-neon-cyan/40 hover:text-neon-cyan"
+                    : "border-white/10 bg-black/20 text-white/30 cursor-not-allowed"
+              }`}
+            >
+              {listening ? (
+                <Mic className="w-5 h-5 animate-pulse" />
+              ) : (
+                <MicOff className="w-5 h-5" />
+              )}
+            </button>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={4}
+              placeholder={
+                listening
+                  ? "Speak now…"
+                  : "Ask BROK anything — or tap the mic to speak…"
+              }
+              className={`flex-1 min-w-0 px-4 py-3 rounded-xl bg-black/30 border text-sm resize-y min-h-[100px] outline-none ${
+                listening
+                  ? "border-neon-cyan/50 focus:border-neon-cyan/60"
+                  : "border-white/10 focus:border-neon-cyan/40"
+              }`}
+            />
+          </div>
+          <p className="text-[10px] text-white/30">
+            Mic = speak your question into the box (then Send). Separate from
+            Voice/Avatar toggles that make BROK talk back.
+          </p>
+        </div>
 
         {stacked && (
           <div className="flex flex-wrap gap-2 sm:hidden">
@@ -827,10 +1015,18 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             <Sparkles className="w-4 h-4" />
             Inneagram
           </button>
+          <button
+            type="button"
+            onClick={() => setCanvasOpen(true)}
+            className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-500/10 border border-emerald-400/35 text-emerald-100 text-sm font-medium hover:bg-emerald-500/20 transition-colors sm:min-w-[140px]"
+          >
+            <LayoutGrid className="w-4 h-4" />
+            Business Canvas
+          </button>
         </div>
         <p className="text-[10px] text-white/35">
-          IEM Report = deal scorecard (HTML). Inneagram = Ingram archetype profile (Summary 7.22) —
-          saved locally + account. No voice/avatar tokens.
+          Business Canvas = workshop BMC one-pager (PDF via Print). IEM = deal scorecard.
+          Inneagram = archetype profile. Canvas/IEM/Inneagram: no voice/avatar tokens.
         </p>
 
         {(error || ((voiceOn || useHeyGenLive) && response)) && (
@@ -857,6 +1053,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         open={inneagramOpen}
         onClose={() => setInneagramOpen(false)}
         userId={user?.id}
+      />
+      <BusinessCanvasPanel
+        open={canvasOpen}
+        onClose={() => setCanvasOpen(false)}
       />
     </div>
   );

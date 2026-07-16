@@ -253,7 +253,7 @@ export function formatKnowledgeBlock(opts: {
   /** Longer Canon slices for detailed / long-answer requests */
   detailed?: boolean;
 }): string | undefined {
-  const canonCap = opts.detailed ? 2800 : 800;
+  const canonCap = opts.detailed ? 2800 : 600;
   const parts: string[] = [];
   if (opts.userFacts?.trim()) {
     parts.push("USER PROFILE (known facts):", opts.userFacts.trim());
@@ -290,12 +290,13 @@ export async function buildKnowledgeContext(
   opts?: { detailed?: boolean }
 ): Promise<{ knowledgeBlock?: string; userFactsBlock?: string }> {
   const detailed = Boolean(opts?.detailed);
-  const canonLimit = detailed ? 8 : 4;
-  const mediumLimit = detailed ? 4 : 2;
+  // Casual turns: fewer/shorter retrievals → lower prompt tokens & shorter answers.
+  const canonLimit = detailed ? 8 : 3;
+  const mediumLimit = detailed ? 4 : 1;
 
   const [canon, shortTerm, mediumTerm, facts] = await Promise.all([
     fetchCanonExcerpts(question, canonLimit).catch(() => [] as string[]),
-    fetchShortTermMemory(userId, question, detailed ? 5 : 3).catch(
+    fetchShortTermMemory(userId, question, detailed ? 5 : 2).catch(
       () => [] as string[]
     ),
     fetchMediumTermMemory(userId, question, mediumLimit).catch(
@@ -309,11 +310,11 @@ export async function buildKnowledgeContext(
   const matchedFaq =
     canon.length === 0 && shortTerm.length === 0 && mediumTerm.length === 0
       ? formatMatchedFaqForPrompt(question)
-      : formatMatchedFaqForPrompt(question, detailed ? 4 : 2);
+      : formatMatchedFaqForPrompt(question, detailed ? 4 : 1);
 
   // Slice long Canon docs around the question (avoids TOC-only prefixes).
   const canonSliced = canon.map((c) =>
-    extractRelevantCanonSlice(c, question, detailed ? 3200 : 1600)
+    extractRelevantCanonSlice(c, question, detailed ? 3200 : 900)
   );
 
   const knowledgeBlock = formatKnowledgeBlock({

@@ -7,7 +7,15 @@ import {
 import type { BuybackInputAsset } from "@/lib/treasuryBuybackConfig";
 import { VersionedTransaction } from "@solana/web3.js";
 
-const JUPITER_QUOTE_API = "https://quote-api.jup.ag/v6";
+/**
+ * Jupiter Swap API v1 (quote-api.jup.ag/v6 is retired — DNS fails → "fetch failed").
+ * Prefer lite-api; fall back to api.jup.ag.
+ * @see https://dev.jup.ag/docs/swap/get-quote
+ */
+const JUPITER_SWAP_BASES = [
+  "https://lite-api.jup.ag/swap/v1",
+  "https://api.jup.ag/swap/v1",
+] as const;
 
 export const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 export const SOL_MINT = "So11111111111111111111111111111111111111112";
@@ -59,6 +67,27 @@ async function fetchSolUsdPrice(): Promise<number | undefined> {
   }
 }
 
+async function jupiterFetch(
+  pathAndQuery: string,
+  init?: RequestInit
+): Promise<Response> {
+  let lastErr: Error | null = null;
+  for (const base of JUPITER_SWAP_BASES) {
+    try {
+      const res = await fetch(`${base}${pathAndQuery}`, {
+        ...init,
+        cache: "no-store",
+      });
+      // Prefer first host that answers (even 4xx — caller handles body)
+      if (res.ok || res.status < 500) return res;
+      lastErr = new Error(`jupiter_http_${res.status}`);
+    } catch (e) {
+      lastErr = e instanceof Error ? e : new Error(String(e));
+    }
+  }
+  throw lastErr ?? new Error("jupiter_unreachable");
+}
+
 export async function executeJupiterPockBuy(opts: {
   usdCents: number;
   inputAsset: BuybackInputAsset;
@@ -74,17 +103,20 @@ export async function executeJupiterPockBuy(opts: {
     throw new Error("buy_amount_too_small");
   }
 
-  const quoteUrl = new URL(`${JUPITER_QUOTE_API}/quote`);
-  quoteUrl.searchParams.set("inputMint", inputMint);
-  quoteUrl.searchParams.set("outputMint", POCK_SPL_MINT);
-  quoteUrl.searchParams.set("amount", amount.toString());
-  quoteUrl.searchParams.set("slippageBps", String(opts.slippageBps));
-  quoteUrl.searchParams.set("swapMode", "ExactIn");
+  const quoteQs = new URLSearchParams({
+    inputMint,
+    outputMint: POCK_SPL_MINT,
+    amount: amount.toString(),
+    slippageBps: String(opts.slippageBps),
+    swapMode: "ExactIn",
+  });
 
-  const quoteRes = await fetch(quoteUrl.toString(), { cache: "no-store" });
+  const quoteRes = await jupiterFetch(`/quote?${quoteQs}`);
   if (!quoteRes.ok) {
     const text = await quoteRes.text().catch(() => "");
-    throw new Error(`jupiter_quote_failed:${quoteRes.status}:${text.slice(0, 200)}`);
+    throw new Error(
+      `jupiter_quote_failed:${quoteRes.status}:${text.slice(0, 200)}`
+    );
   }
 
   const quote = await quoteRes.json();
@@ -92,7 +124,7 @@ export async function executeJupiterPockBuy(opts: {
     throw new Error("jupiter_quote_invalid");
   }
 
-  const swapRes = await fetch(`${JUPITER_QUOTE_API}/swap`, {
+  const swapRes = await jupiterFetch(`/swap`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -106,7 +138,9 @@ export async function executeJupiterPockBuy(opts: {
 
   if (!swapRes.ok) {
     const text = await swapRes.text().catch(() => "");
-    throw new Error(`jupiter_swap_failed:${swapRes.status}:${text.slice(0, 200)}`);
+    throw new Error(
+      `jupiter_swap_failed:${swapRes.status}:${text.slice(0, 200)}`
+    );
   }
 
   const swapPayload = (await swapRes.json()) as { swapTransaction?: string };

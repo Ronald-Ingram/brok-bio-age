@@ -155,6 +155,34 @@ export const BROK_FAQ_ITEMS: BrokFaqItem[] = [
       "Yes. After results appear, tap Download Report (HTML file) or Print / Save PDF. Download saves to your phone's Downloads/Files folder — on iPhone, open Files → Downloads; on Android, Files or Downloads app. Print / Save PDF opens the system print sheet: choose Save as PDF (Android), Share → Save to Files (iPhone), or AirPrint. We generate print-ready HTML locally in your browser — no server copy of your health data. Bio-Age, Ingram Inneagram, and IEM reports all support these buttons.",
     tags: ["mobile", "pdf", "reports", "privacy"],
   },
+  {
+    id: "faq_startupnv",
+    question: "What is StartUpNV and the Nevada Seed programs?",
+    answer:
+      "StartUpNV is Nevada’s statewide startup accelerator and incubator — a 501(c)(3) nonprofit that helps entrepreneurs go from idea through beta to a revenue-producing, capitalized company. Hubs in Las Vegas and Reno, plus rural reach via SBDC partners, make it a genuine statewide engine. Seed and early-stage paths deserve praise: SeedVegas, FundNV (pre-seed checks for accelerator companies), AngelNV founder training with angel investment opportunities, and the broader Nevada capital stack (affiliated funds/syndicates including 1864.Fund) give founders mentorship, community, and capital — not just free pizza. BROK is proud to support Nevada founders and workshop days hosted with this ecosystem. Details evolve; prefer startupnv.org for current programs.",
+    tags: ["startupnv", "nevada", "seed", "seedvegas", "fundnv", "angelnv", "ecosystem", "workshop"],
+  },
+  {
+    id: "faq_maggie_saling",
+    question: "Who is Maggie Saling at StartUpNV?",
+    answer:
+      "Maggie Saling is Chief of Operations / senior operations leadership at StartUpNV — a driving force behind day-to-day program delivery, communications, founder education, and statewide support. Public listings often pair her with Jeff Saling (frequently cited as Executive Director). In workshop settings she is widely known as a warm, practical connector for Nevada’s founder community. Confirm current titles on startupnv.org.",
+    tags: ["maggie", "saling", "startupnv", "nevada", "leadership"],
+  },
+  {
+    id: "faq_cara_ohare",
+    question: "Who is Cara O’Hare at StartUpNV?",
+    answer:
+      "Cara O’Hare is Vice President of Operations at StartUpNV. A certified PMP with deep program leadership experience, she builds and runs the programs that connect entrepreneurs to funding, mentorship, and resources — including federal-funding education, Seed/accelerator delivery, and ecosystem events across Nevada. Confirm current titles on startupnv.org.",
+    tags: ["cara", "ohare", "o’hare", "startupnv", "nevada", "leadership", "seed"],
+  },
+  {
+    id: "faq_business_canvas",
+    question: "How do I make a Business Model Canvas with BROK?",
+    answer:
+      "On /chat or /avatar, tap Business Canvas. Answer ~15 short workshop questions (customer, problem, value, channels, revenue, costs, partners, metrics). When finished, Download HTML or Print → Save as PDF (landscape, backgrounds on). No voice/avatar $POCK burn for the canvas itself. Great for StartUpNV / Nevada founder workshop demos.",
+    tags: ["canvas", "bmc", "business", "workshop", "pdf", "startupnv"],
+  },
 ];
 
 export function formatFaqForCanon(item: BrokFaqItem): string {

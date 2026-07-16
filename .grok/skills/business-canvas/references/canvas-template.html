@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Business Model Canvas — {{ventureName}}</title>
+  <style>
+    @page { size: landscape; margin: 10mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      background: #fff;
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      border-bottom: 2px solid #0e7490;
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+    }
+    h1 { margin: 0; font-size: 18px; color: #0e7490; }
+    .meta { color: #64748b; font-size: 10px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+      grid-template-rows: 1fr 1fr auto;
+      gap: 6px;
+      min-height: 70vh;
+    }
+    .cell {
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 8px;
+      background: #f8fafc;
+      min-height: 120px;
+    }
+    .cell h2 {
+      margin: 0 0 6px;
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #0e7490;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 4px;
+    }
+    .cell p { margin: 0; white-space: pre-wrap; color: #1e293b; }
+    .kp { grid-column: 1; grid-row: 1 / 3; }
+    .ka { grid-column: 2; grid-row: 1; }
+    .vp { grid-column: 3; grid-row: 1 / 3; background: #ecfeff; border-color: #67e8f9; }
+    .cr { grid-column: 4; grid-row: 1; }
+    .cs { grid-column: 5; grid-row: 1 / 3; }
+    .kr { grid-column: 2; grid-row: 2; }
+    .ch { grid-column: 4; grid-row: 2; }
+    .cost { grid-column: 1 / 3; grid-row: 3; min-height: 80px; }
+    .rev { grid-column: 3 / 6; grid-row: 3; min-height: 80px; }
+    .extras {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    footer {
+      margin-top: 10px;
+      font-size: 9px;
+      color: #94a3b8;
+      border-top: 1px solid #e2e8f0;
+      padding-top: 6px;
+    }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .cell { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Business Model Canvas</h1>
+      <div class="meta">{{ventureName}} · {{date}} · Prepared with BROK / Neobanx</div>
+    </div>
+    <div class="meta">Customer one-pager · Not financial or legal advice</div>
+  </header>
+
+  <div class="grid">
+    <section class="cell kp"><h2>Key Partnerships</h2><p>{{keyPartnerships}}</p></section>
+    <section class="cell ka"><h2>Key Activities</h2><p>{{keyActivities}}</p></section>
+    <section class="cell vp"><h2>Value Propositions</h2><p>{{valuePropositions}}</p></section>
+    <section class="cell cr"><h2>Customer Relationships</h2><p>{{customerRelationships}}</p></section>
+    <section class="cell cs"><h2>Customer Segments</h2><p>{{customerSegments}}</p></section>
+    <section class="cell kr"><h2>Key Resources</h2><p>{{keyResources}}</p></section>
+    <section class="cell ch"><h2>Channels</h2><p>{{channels}}</p></section>
+    <section class="cell cost"><h2>Cost Structure</h2><p>{{costStructure}}</p></section>
+    <section class="cell rev"><h2>Revenue Streams</h2><p>{{revenueStreams}}</p></section>
+  </div>
+
+  <div class="extras">
+    <section class="cell"><h2>Problem</h2><p>{{problem}}</p></section>
+    <section class="cell"><h2>Status Quo / Alternatives</h2><p>{{statusQuo}}</p></section>
+    <section class="cell"><h2>Assumptions &amp; Risks</h2><p>{{assumptions}}</p></section>
+  </div>
+  <div class="extras">
+    <section class="cell"><h2>Key Metrics</h2><p>{{keyMetrics}}</p></section>
+    <section class="cell" style="grid-column: span 2;"><h2>Unfair Advantage</h2><p>{{unfairAdvantage}}</p></section>
+  </div>
+
+  <footer>
+    Generated for workshop / training use. Validate with customers. Neobanx / BROK — brok.neobanx.com · Not financial, investment, or legal advice.
+  </footer>
+</body>
+</html>
