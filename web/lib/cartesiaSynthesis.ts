@@ -1,4 +1,3 @@
-import { normalizePcmS16lePeak } from "./audioGain";
 import { CARTESIA_API_KEY } from "./brokApiConfig";
 import { getActiveCartesiaVoiceId } from "./cartesiaClone";
 import { chunkTextForTts } from "./speechChunks";
@@ -23,7 +22,6 @@ async function fetchCartesiaPcm(
   sampleRate: number
 ): Promise<Buffer> {
   const voiceId = await getActiveCartesiaVoiceId();
-  // Clean synthesis at default loudness — phone loudness via peak-normalize, not API overdrive.
   const res = await fetch("https://api.cartesia.ai/tts/bytes", {
     method: "POST",
     headers: cartesiaHeaders(),
@@ -90,7 +88,7 @@ export async function synthesizeCartesiaWavBlob(
     pcmParts.push(await fetchCartesiaPcm(part, 24_000));
   }
 
-  const pcm = normalizePcmS16lePeak(Buffer.concat(pcmParts), 0.88);
+  const pcm = Buffer.concat(pcmParts);
   return { wav: pcmToWav(pcm, 24_000), segments: parts.length };
 }
 
@@ -113,7 +111,7 @@ export async function synthesizeCartesiaPcmForHeyGen(
     );
   }
 
-  const pcm = normalizePcmS16lePeak(Buffer.concat(pcmParts), 0.88);
+  const pcm = Buffer.concat(pcmParts);
   return {
     chunks: pcmToBase64Chunks(pcm, HEYGEN_PCM_SAMPLE_RATE),
     segments: parts.length,

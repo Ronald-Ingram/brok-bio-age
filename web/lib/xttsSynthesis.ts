@@ -1,4 +1,3 @@
-import { normalizePcmS16lePeak } from "./audioGain";
 import { voiceCloneEndpoint } from "./brokApiConfig";
 import { chunkTextForTts, MAX_TTS_SEGMENTS, TTS_CHUNK_CHARS } from "./speechChunks";
 import { normalizeForSpeech } from "./spokenText";
@@ -50,7 +49,7 @@ export async function synthesizeXttsPcmForHeyGen(
     }
   }
 
-  const combined = normalizePcmS16lePeak(Buffer.concat(pcmBuffers), 0.88);
+  const combined = Buffer.concat(pcmBuffers);
   const chunkBytes = 24_000 * 2;
   const out: string[] = [];
   for (let i = 0; i < combined.length; i += chunkBytes) {
@@ -81,7 +80,7 @@ export async function synthesizeXttsWavBlob(
     }
   }
 
-  const pcm = normalizePcmS16lePeak(Buffer.concat(pcmParts), 0.88);
+  const pcm = Buffer.concat(pcmParts);
   const header = Buffer.alloc(44);
   header.write("RIFF", 0);
   header.writeUInt32LE(36 + pcm.length, 4);
