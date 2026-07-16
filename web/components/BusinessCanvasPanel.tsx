@@ -16,10 +16,13 @@ import {
   Download,
   LayoutGrid,
   Lightbulb,
+  Mic,
+  MicOff,
   Printer,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useBrowserSpeechInput } from "@/hooks/useBrowserSpeechInput";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 interface BusinessCanvasPanelProps {
   open: boolean;
@@ -41,10 +44,33 @@ export function BusinessCanvasPanel({ open, onClose }: BusinessCanvasPanelProps)
   const [showNv, setShowNv] = useState(false);
   /** Detailed tip open by default so workshop founders see guidance without hover. */
   const [tipOpen, setTipOpen] = useState(true);
+  const [sttError, setSttError] = useState<string | null>(null);
 
   const q = CANVAS_QUESTIONS[step];
   const total = CANVAS_QUESTIONS.length;
   const progress = Math.round(((step + (done ? 1 : 0)) / total) * 100);
+  const fieldRef = useRef(q?.field);
+  fieldRef.current = q?.field;
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
+
+  const {
+    listening,
+    supported: sttSupported,
+    toggle: toggleListen,
+    stop: stopListening,
+  } = useBrowserSpeechInput({
+    getValue: () => {
+      const f = fieldRef.current;
+      return f ? answersRef.current[f] ?? "" : "";
+    },
+    setValue: (text) => {
+      const f = fieldRef.current;
+      if (!f) return;
+      setAnswers((prev) => ({ ...prev, [f]: text }));
+    },
+    onError: (msg) => setSttError(msg),
+  });
 
   const html = useMemo(
     () => (done ? buildBusinessCanvasHtml(answers) : ""),
@@ -54,17 +80,26 @@ export function BusinessCanvasPanel({ open, onClose }: BusinessCanvasPanelProps)
   // Re-open the tip when the question changes so each step’s guidance is visible.
   useEffect(() => {
     setTipOpen(true);
-  }, [step]);
+    stopListening();
+    setSttError(null);
+  }, [step, stopListening]);
+
+  useEffect(() => {
+    if (!open) stopListening();
+  }, [open, stopListening]);
 
   const reset = useCallback(() => {
+    stopListening();
     setStep(0);
     setAnswers(emptyCanvasAnswers());
     setDone(false);
     setShowNv(false);
     setTipOpen(true);
-  }, []);
+    setSttError(null);
+  }, [stopListening]);
 
   const close = () => {
+    stopListening();
     onClose();
   };
 
@@ -81,6 +116,7 @@ export function BusinessCanvasPanel({ open, onClose }: BusinessCanvasPanelProps)
 
   const goNext = () => {
     if (!canNext) return;
+    stopListening();
     if (step >= total - 1) {
       setDone(true);
       return;
@@ -89,6 +125,7 @@ export function BusinessCanvasPanel({ open, onClose }: BusinessCanvasPanelProps)
   };
 
   const goBack = () => {
+    stopListening();
     if (done) {
       setDone(false);
       return;
@@ -232,14 +269,81 @@ export function BusinessCanvasPanel({ open, onClose }: BusinessCanvasPanelProps)
                 )}
               </div>
 
-              <textarea
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                rows={4}
-                autoFocus
-                placeholder="Type your answer… (mic in chat first, then paste here if useful)"
-                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-sm resize-y min-h-[100px] focus:border-neon-cyan/40 outline-none"
-              />
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-white/50">
+                    {listening ? (
+                      <span className="text-neon-cyan font-medium animate-pulse">
+                        ● Listening — tap Stop when finished
+                      </span>
+                    ) : (
+                      <>
+                        Tap <strong className="text-white/75">Mic</strong> to
+                        dictate this answer
+                      </>
+                    )}
+                  </span>
+                </div>
+                <div className="flex gap-2 items-stretch">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSttError(null);
+                      void toggleListen();
+                    }}
+                    title={
+                      sttSupported
+                        ? listening
+                          ? "Stop microphone"
+                          : "Turn on microphone — speak your answer"
+                        : "Dictation needs Chrome or Edge"
+                    }
+                    aria-label={
+                      listening ? "Stop microphone" : "Turn on microphone"
+                    }
+                    aria-pressed={listening}
+                    className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[4.25rem] px-2 rounded-xl border transition-colors ${
+                      listening
+                        ? "border-neon-cyan/70 bg-neon-cyan/25 text-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.25)]"
+                        : sttSupported
+                          ? "border-neon-cyan/35 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20"
+                          : "border-white/10 bg-black/20 text-white/30 cursor-not-allowed"
+                    }`}
+                  >
+                    {listening ? (
+                      <Mic className="w-5 h-5 animate-pulse" />
+                    ) : sttSupported ? (
+                      <Mic className="w-5 h-5" />
+                    ) : (
+                      <MicOff className="w-5 h-5" />
+                    )}
+                    <span className="text-[10px] font-semibold leading-none">
+                      {listening ? "Stop" : "Mic"}
+                    </span>
+                  </button>
+                  <textarea
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    rows={4}
+                    autoFocus
+                    placeholder={
+                      listening
+                        ? "Listening… speak your answer"
+                        : "Type here — or tap Mic to speak"
+                    }
+                    className={`flex-1 min-w-0 px-4 py-3 rounded-xl bg-black/30 border text-sm resize-y min-h-[100px] outline-none ${
+                      listening
+                        ? "border-neon-cyan/50 focus:border-neon-cyan/60"
+                        : "border-white/10 focus:border-neon-cyan/40"
+                    }`}
+                  />
+                </div>
+                {sttError && (
+                  <p className="text-xs text-amber-200/90 leading-snug">
+                    {sttError}
+                  </p>
+                )}
+              </div>
             </>
           )}
 

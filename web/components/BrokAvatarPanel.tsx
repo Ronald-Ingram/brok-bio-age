@@ -35,6 +35,7 @@ import {
 import Image from "next/image";
 import { brokAuthHeaders } from "@/lib/authFetch";
 import { buildPageContextPayload } from "@/lib/brokPageContext";
+import { useBrowserSpeechInput } from "@/hooks/useBrowserSpeechInput";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -45,35 +46,6 @@ type ChatTurn = {
 };
 
 const threadStorageKey = (userId: string) => `brok_thread_id:${userId}`;
-
-/** Browser STT (Chrome/Edge/Safari partial) — input only; TTS stays Cartesia/XTTS/Avatar. */
-type BrowserSpeechRecognition = {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  abort: () => void;
-  onresult: ((ev: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((ev: { error?: string }) => void) | null;
-  onend: (() => void) | null;
-};
-
-type SpeechRecognitionEventLike = {
-  resultIndex: number;
-  results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }>;
-};
-
-function getSpeechRecognitionCtor():
-  | (new () => BrowserSpeechRecognition)
-  | null {
-  if (typeof window === "undefined") return null;
-  const w = window as Window & {
-    SpeechRecognition?: new () => BrowserSpeechRecognition;
-    webkitSpeechRecognition?: new () => BrowserSpeechRecognition;
-  };
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-}
 
 interface BrokStatus {
   brokApi: boolean;
@@ -136,108 +108,22 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [speakProgress, setSpeakProgress] = useState<string | null>(null);
   const [lastUserMessage, setLastUserMessage] = useState("");
   const [lastModel, setLastModel] = useState<string | null>(null);
-  const [listening, setListening] = useState(false);
-  const [sttSupported, setSttSupported] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
-  /** Text committed before this listen session (so interim can replace freely). */
-  const sttBaseRef = useRef("");
+  const messageRef = useRef(message);
+  messageRef.current = message;
+
+  const {
+    listening,
+    supported: sttSupported,
+    toggle: toggleListen,
+    stop: stopListening,
+  } = useBrowserSpeechInput({
+    getValue: () => messageRef.current,
+    setValue: setMessage,
+    onError: (msg) => setError(msg),
+  });
 
   const useHeyGenLive = Boolean(avatarOn && status?.heygen);
-
-  useEffect(() => {
-    setSttSupported(Boolean(getSpeechRecognitionCtor()));
-    return () => {
-      try {
-        recognitionRef.current?.abort();
-      } catch {
-        /* ignore */
-      }
-      recognitionRef.current = null;
-    };
-  }, []);
-
-  const stopListening = useCallback(() => {
-    try {
-      recognitionRef.current?.stop();
-    } catch {
-      /* ignore */
-    }
-    setListening(false);
-  }, []);
-
-  const toggleListen = useCallback(() => {
-    const Ctor = getSpeechRecognitionCtor();
-    if (!Ctor) {
-      setError(
-        "Voice input needs a browser that supports speech recognition (Chrome or Edge work best). On iPhone Safari support is limited — try Chrome if available."
-      );
-      return;
-    }
-
-    if (listening) {
-      stopListening();
-      return;
-    }
-
-    setError(null);
-    sttBaseRef.current = message.trim();
-    const rec = new Ctor();
-    recognitionRef.current = rec;
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.lang = "en-US";
-
-    rec.onresult = (ev: SpeechRecognitionEventLike) => {
-      let interim = "";
-      let finalChunk = "";
-      for (let i = ev.resultIndex; i < ev.results.length; i++) {
-        const piece = ev.results[i]![0]?.transcript ?? "";
-        if (ev.results[i]!.isFinal) finalChunk += piece;
-        else interim += piece;
-      }
-      if (finalChunk) {
-        const base = sttBaseRef.current;
-        sttBaseRef.current = base
-          ? `${base}${base.endsWith(" ") ? "" : " "}${finalChunk.trim()}`
-          : finalChunk.trim();
-      }
-      const live = interim.trim();
-      const committed = sttBaseRef.current;
-      setMessage(
-        live
-          ? committed
-            ? `${committed}${committed.endsWith(" ") ? "" : " "}${live}`
-            : live
-          : committed
-      );
-    };
-
-    rec.onerror = (ev) => {
-      const code = ev.error ?? "unknown";
-      if (code === "not-allowed" || code === "service-not-allowed") {
-        setError(
-          "Microphone permission blocked — allow mic access for this site and try again."
-        );
-      } else if (code !== "aborted" && code !== "no-speech") {
-        setError(`Voice input error (${code}). Try again or type instead.`);
-      }
-      setListening(false);
-    };
-
-    rec.onend = () => {
-      setListening(false);
-      recognitionRef.current = null;
-    };
-
-    try {
-      rec.start();
-      setListening(true);
-    } catch {
-      setError("Could not start microphone — try again or type your message.");
-      setListening(false);
-    }
-  }, [listening, message, stopListening]);
 
   // Stable callbacks so HeyGenLiveAvatar does not reconnect-loop every render.
   const handleAvatarError = useCallback((msg: string) => {
@@ -526,6 +412,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
 
   const handleSend = async () => {
     if (!message.trim() && !pendingFiles.length && !fileContexts.length) return;
+    stopListening();
     setError(null);
     setLoading(true);
     setResponse("");
@@ -840,43 +727,56 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         )}
 
         <div className="block space-y-1.5 flex-1">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs uppercase tracking-wider text-white/40">
-              Message
+              Your message
             </span>
-            {listening && (
-              <span className="text-[10px] text-neon-cyan animate-pulse">
-                Listening… tap mic to stop, then Send
+            {listening ? (
+              <span className="text-[11px] font-medium text-neon-cyan animate-pulse">
+                ● Listening — tap Stop mic when done, then Send
+              </span>
+            ) : (
+              <span className="text-[11px] text-white/50">
+                Tap <strong className="text-white/75">Mic</strong> left of the box
+                to dictate
               </span>
             )}
           </div>
           <div className="flex gap-2 items-stretch">
             <button
               type="button"
-              onClick={() => void toggleListen()}
+              onClick={() => {
+                setError(null);
+                void toggleListen();
+              }}
               disabled={loading}
               title={
                 sttSupported
                   ? listening
-                    ? "Stop listening"
-                    : "Speak instead of typing — fills the message box"
-                  : "Voice input not supported in this browser — use Chrome or Edge"
+                    ? "Stop microphone"
+                    : "Turn on microphone — speak; text appears in the box"
+                  : "Voice input not supported here — use Chrome or Edge"
               }
-              aria-label={listening ? "Stop voice input" : "Start voice input"}
+              aria-label={listening ? "Stop microphone" : "Turn on microphone"}
               aria-pressed={listening}
-              className={`shrink-0 inline-flex items-center justify-center w-12 rounded-xl border transition-colors ${
+              className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[4.25rem] px-2 rounded-xl border transition-colors ${
                 listening
-                  ? "border-neon-cyan/60 bg-neon-cyan/20 text-neon-cyan"
+                  ? "border-neon-cyan/70 bg-neon-cyan/25 text-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.25)]"
                   : sttSupported
-                    ? "border-white/15 bg-black/30 text-white/70 hover:border-neon-cyan/40 hover:text-neon-cyan"
+                    ? "border-neon-cyan/35 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 hover:border-neon-cyan/55"
                     : "border-white/10 bg-black/20 text-white/30 cursor-not-allowed"
               }`}
             >
               {listening ? (
                 <Mic className="w-5 h-5 animate-pulse" />
+              ) : sttSupported ? (
+                <Mic className="w-5 h-5" />
               ) : (
                 <MicOff className="w-5 h-5" />
               )}
+              <span className="text-[10px] font-semibold leading-none">
+                {listening ? "Stop" : "Mic"}
+              </span>
             </button>
             <textarea
               value={message}
@@ -884,8 +784,8 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               rows={4}
               placeholder={
                 listening
-                  ? "Speak now…"
-                  : "Ask BROK anything — or tap the mic to speak…"
+                  ? "Listening… speak now"
+                  : "Type here — or tap Mic to speak your question"
               }
               className={`flex-1 min-w-0 px-4 py-3 rounded-xl bg-black/30 border text-sm resize-y min-h-[100px] outline-none ${
                 listening
@@ -894,9 +794,17 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               }`}
             />
           </div>
-          <p className="text-[10px] text-white/30">
-            Mic = speak your question into the box (then Send). Separate from
-            Voice/Avatar toggles that make BROK talk back.
+          <p className="text-[11px] text-white/45 leading-snug">
+            <strong className="text-white/65">Mic</strong> = you speak → text
+            fills this box → press Send. That is separate from the{" "}
+            <strong className="text-white/65">Voice / Avatar</strong> toggles
+            (those make BROK talk back).
+            {!sttSupported && (
+              <span className="text-amber-200/80">
+                {" "}
+                This browser may not support dictation — try Chrome or Edge.
+              </span>
+            )}
           </p>
         </div>
 
