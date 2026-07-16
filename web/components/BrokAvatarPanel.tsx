@@ -431,10 +431,15 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const rearmVoiceInput = useCallback(() => {
     setMessage("");
     messageRef.current = "";
-    // Focus so heavy users can type or see the empty box immediately.
-    requestAnimationFrame(() => {
-      messageInputRef.current?.focus();
-    });
+    // Never scroll the page to the input — iPhone Safari jumps to top on focus().
+    const coarse =
+      typeof window !== "undefined" &&
+      window.matchMedia("(pointer: coarse)").matches;
+    if (!coarse) {
+      requestAnimationFrame(() => {
+        messageInputRef.current?.focus({ preventScroll: true });
+      });
+    }
     if (!sttSupported || !preferVoiceInputRef.current) return;
     // Small delay so TTS / avatar release the audio stack before Web Speech starts.
     window.setTimeout(() => {
@@ -567,7 +572,8 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         <div
           className={`relative mx-auto w-full max-w-md rounded-xl overflow-hidden border border-neon-cyan/20 bg-black ${
             stacked
-              ? "aspect-[4/5] max-h-[min(36vh,320px)] sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
+              ? // Fixed px heights on mobile — vh units jump when iOS chrome shows/hides and yank scroll.
+                "h-[200px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
               : "aspect-[3/4] min-h-[420px] max-h-[600px]"
           }`}
         >
@@ -696,7 +702,8 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       <section
         className={`rounded-2xl border border-white/10 bg-bg-card space-y-3 flex flex-col ${
           stacked
-            ? "p-2 pt-1 sm:p-5 sm:pt-4 sm:space-y-4 rounded-t-none sm:rounded-t-2xl border-t-0 sm:border-t -mt-px"
+            ? // Extra bottom pad so fixed mobile composer does not cover tools.
+              "p-2 pt-1 pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))] sm:p-5 sm:pt-4 sm:pb-5 sm:space-y-4 rounded-t-none sm:rounded-t-2xl border-t-0 sm:border-t -mt-px"
             : "p-5 space-y-4"
         }`}
       >
@@ -714,7 +721,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           </button>
         </div>
 
-        {/* Latest answer + history first (newest on top); input ready below for next turn. */}
+        {/* Latest answer + history (newest on top). Composer is fixed on mobile — no scroll hunt. */}
         {response && (
           <div className="rounded-xl border border-neon-cyan/25 bg-neon-cyan/5 p-3 sm:p-4 space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -736,15 +743,15 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 Copy full text
               </button>
             </div>
-            <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed max-h-[min(32vh,280px)] sm:max-h-[min(40vh,360px)] overflow-y-auto overscroll-contain">
+            <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed max-h-[220px] sm:max-h-[min(40vh,360px)] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
               {response}
             </p>
           </div>
         )}
 
         {(chatTurns.length > 0 || historyLoading) && (
-          <div className="rounded-xl border border-white/8 bg-black/25 p-3 max-h-[min(45vh,420px)] sm:max-h-[min(52vh,520px)] overflow-y-auto space-y-3 min-h-[80px] overscroll-contain">
-            <div className="flex items-center justify-between gap-2 sticky top-0 bg-black/40 backdrop-blur-sm -mx-1 px-1 py-1 z-10">
+          <div className="rounded-xl border border-white/8 bg-black/25 p-3 max-h-[280px] sm:max-h-[min(52vh,520px)] overflow-y-auto space-y-3 min-h-[80px] overscroll-contain [-webkit-overflow-scrolling:touch]">
+            <div className="flex items-center justify-between gap-2 sticky top-0 bg-[#0a0a10]/95 backdrop-blur-sm -mx-1 px-1 py-1 z-10">
               <span className="text-[10px] uppercase tracking-wider text-white/35">
                 Dialogue
               </span>
@@ -777,96 +784,136 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           </div>
         )}
 
-        <div className="block space-y-1.5 flex-1">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-xs uppercase tracking-wider text-white/40">
-              Your next message
-            </span>
-            {listening ? (
-              <span className="text-[11px] font-medium text-neon-cyan animate-pulse">
-                ● Listening — tap Stop when done, then Send
+        {/*
+          Mobile: fixed composer at bottom of viewport so iPhone users never fight
+          page scroll / focus jumps to reach Mic + input + Send.
+          Desktop: normal in-flow block.
+        */}
+        <div
+          className={
+            stacked
+              ? "fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-bg-dark/95 backdrop-blur-md px-3 pt-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.45)] sm:static sm:inset-auto sm:z-auto sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:px-0 sm:pt-0 sm:pb-0 sm:shadow-none"
+              : "block"
+          }
+        >
+          <div className="mx-auto max-w-5xl space-y-1.5 sm:space-y-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-xs uppercase tracking-wider text-white/40">
+                Your next message
               </span>
-            ) : loading || voiceLoading ? (
-              <span className="text-[11px] text-white/45">
-                BROK is responding… box clears for your next turn
-              </span>
-            ) : (
-              <span className="text-[11px] text-white/50">
-                Tap <strong className="text-white/75">Mic</strong> to dictate
-                (re-arms after BROK finishes if you used mic)
-              </span>
-            )}
-          </div>
-          <div className="flex gap-2 items-stretch">
-            <button
-              type="button"
-              onClick={() => {
-                setError(null);
-                // Once they open Mic, keep re-arming after each BROK reply (hands-free loop).
-                if (!listening) preferVoiceInputRef.current = true;
-                void toggleListen();
-              }}
-              disabled={loading || voiceLoading}
-              title={
-                sttSupported
-                  ? listening
-                    ? "Stop microphone"
-                    : "Turn on microphone — speak; text appears in the box"
-                  : "Voice input not supported here — use Chrome or Edge"
-              }
-              aria-label={listening ? "Stop microphone" : "Turn on microphone"}
-              aria-pressed={listening}
-              className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[4.25rem] px-2 rounded-xl border transition-colors ${
-                listening
-                  ? "border-neon-cyan/70 bg-neon-cyan/25 text-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.25)]"
-                  : sttSupported
-                    ? "border-neon-cyan/35 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 hover:border-neon-cyan/55"
-                    : "border-white/10 bg-black/20 text-white/30 cursor-not-allowed"
-              }`}
-            >
               {listening ? (
-                <Mic className="w-5 h-5 animate-pulse" />
-              ) : sttSupported ? (
-                <Mic className="w-5 h-5" />
+                <span className="text-[11px] font-medium text-neon-cyan animate-pulse">
+                  ● Listening — Stop, then Send
+                </span>
+              ) : loading || voiceLoading ? (
+                <span className="text-[11px] text-white/45">
+                  BROK responding…
+                </span>
               ) : (
-                <MicOff className="w-5 h-5" />
+                <span className="text-[11px] text-white/50 hidden sm:inline">
+                  Tap <strong className="text-white/75">Mic</strong> to dictate
+                </span>
               )}
-              <span className="text-[10px] font-semibold leading-none">
-                {listening ? "Stop" : "Mic"}
-              </span>
-            </button>
-            <textarea
-              ref={messageInputRef}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={4}
-              placeholder={
-                listening
-                  ? "Listening… speak now"
-                  : loading || voiceLoading
-                    ? "Waiting for BROK… then speak or type the next question"
-                    : "Type here — or tap Mic to speak your question"
-              }
-              className={`flex-1 min-w-0 px-4 py-3 rounded-xl bg-black/30 border text-sm resize-y min-h-[100px] outline-none ${
-                listening
-                  ? "border-neon-cyan/50 focus:border-neon-cyan/60"
-                  : "border-white/10 focus:border-neon-cyan/40"
-              }`}
-            />
+            </div>
+            <div className="flex gap-2 items-stretch">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  if (!listening) preferVoiceInputRef.current = true;
+                  void toggleListen();
+                }}
+                disabled={loading || voiceLoading}
+                title={
+                  sttSupported
+                    ? listening
+                      ? "Stop microphone"
+                      : "Turn on microphone — speak; text appears in the box"
+                    : "Voice input not supported here — use Chrome or Edge"
+                }
+                aria-label={listening ? "Stop microphone" : "Turn on microphone"}
+                aria-pressed={listening}
+                className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] sm:min-w-[4.25rem] px-2 rounded-xl border transition-colors ${
+                  listening
+                    ? "border-neon-cyan/70 bg-neon-cyan/25 text-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.25)]"
+                    : sttSupported
+                      ? "border-neon-cyan/35 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 hover:border-neon-cyan/55"
+                      : "border-white/10 bg-black/20 text-white/30 cursor-not-allowed"
+                }`}
+              >
+                {listening ? (
+                  <Mic className="w-5 h-5 animate-pulse" />
+                ) : sttSupported ? (
+                  <Mic className="w-5 h-5" />
+                ) : (
+                  <MicOff className="w-5 h-5" />
+                )}
+                <span className="text-[10px] font-semibold leading-none">
+                  {listening ? "Stop" : "Mic"}
+                </span>
+              </button>
+              <textarea
+                ref={messageInputRef}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={2}
+                enterKeyHint="send"
+                onFocus={(e) => {
+                  // iOS often scrolls the whole page when focusing; keep window put.
+                  const y = window.scrollY;
+                  requestAnimationFrame(() => {
+                    if (Math.abs(window.scrollY - y) > 2) {
+                      window.scrollTo(0, y);
+                    }
+                  });
+                  // Optional: only soft-focus, no scrollIntoView
+                  void e;
+                }}
+                placeholder={
+                  listening
+                    ? "Listening… speak now"
+                    : loading || voiceLoading
+                      ? "Waiting for BROK…"
+                      : "Type or tap Mic…"
+                }
+                className={`flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-black/40 sm:bg-black/30 border text-sm resize-none sm:resize-y min-h-[52px] sm:min-h-[100px] outline-none ${
+                  listening
+                    ? "border-neon-cyan/50 focus:border-neon-cyan/60"
+                    : "border-white/10 focus:border-neon-cyan/40"
+                }`}
+              />
+              <button
+                type="button"
+                disabled={
+                  loading ||
+                  iemReportLoading ||
+                  (!message.trim() && !pendingFiles.length && !fileContexts.length)
+                }
+                onClick={() => void handleSend()}
+                className="shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] px-2 rounded-xl border border-neon-cyan/50 bg-neon-cyan/15 text-neon-cyan text-[10px] font-semibold hover:bg-neon-cyan/25 disabled:opacity-50 sm:hidden"
+                aria-label="Send to BROK"
+              >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+                Send
+              </button>
+            </div>
+            <p className="text-[10px] text-white/40 leading-snug hidden sm:block">
+              <strong className="text-white/60">Mic</strong> → speak → Send.
+              Clears on send; re-arms after BROK finishes if you used mic.{" "}
+              <strong className="text-white/60">Voice / Avatar</strong> = BROK
+              talks back.
+              {!sttSupported && (
+                <span className="text-amber-200/80">
+                  {" "}
+                  Dictation needs Chrome or Edge.
+                </span>
+              )}
+            </p>
           </div>
-          <p className="text-[11px] text-white/45 leading-snug">
-            <strong className="text-white/65">Mic</strong> → speak → Send. Input
-            clears on send; after BROK finishes speaking, mic re-arms for the
-            next question.{" "}
-            <strong className="text-white/65">Voice / Avatar</strong> = BROK
-            talks back (separate).
-            {!sttSupported && (
-              <span className="text-amber-200/80">
-                {" "}
-                This browser may not support dictation — try Chrome or Edge.
-              </span>
-            )}
-          </p>
         </div>
 
         {stacked && (
@@ -948,7 +995,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               (!message.trim() && !pendingFiles.length && !fileContexts.length)
             }
             onClick={handleSend}
-            className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-50 transition-colors"
+            className="hidden sm:inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-50 transition-colors"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
