@@ -1,4 +1,4 @@
-import { boostPcmS16le } from "./audioGain";
+import { normalizePcmS16lePeak } from "./audioGain";
 import { CARTESIA_API_KEY } from "./brokApiConfig";
 import { getActiveCartesiaVoiceId } from "./cartesiaClone";
 import { chunkTextForTts } from "./speechChunks";
@@ -8,8 +8,6 @@ const HEYGEN_PCM_SAMPLE_RATE = 24_000;
 const CARTESIA_MODEL = "sonic-3.5";
 const CARTESIA_CHUNK_CHARS = 1_500;
 const CARTESIA_MAX_SEGMENTS = 16;
-/** Clone voices often render soft on phone speakers — boost toward full loudness. */
-const TTS_PCM_GAIN = 1.9;
 
 function cartesiaHeaders(): Record<string, string> {
   if (!CARTESIA_API_KEY) throw new Error("cartesia_api_key_missing");
@@ -25,33 +23,21 @@ async function fetchCartesiaPcm(
   sampleRate: number
 ): Promise<Buffer> {
   const voiceId = await getActiveCartesiaVoiceId();
-  const baseBody = {
-    model_id: CARTESIA_MODEL,
-    transcript,
-    voice: { mode: "id" as const, id: voiceId },
-    output_format: {
-      container: "raw" as const,
-      encoding: "pcm_s16le" as const,
-      sample_rate: sampleRate,
-    },
-  };
-
-  // Loudness first; if Cartesia rejects generation_config, retry plain body.
-  let res = await fetch("https://api.cartesia.ai/tts/bytes", {
+  // Clean synthesis at default loudness — phone loudness via peak-normalize, not API overdrive.
+  const res = await fetch("https://api.cartesia.ai/tts/bytes", {
     method: "POST",
     headers: cartesiaHeaders(),
     body: JSON.stringify({
-      ...baseBody,
-      generation_config: { volume: 2, speed: 1 },
+      model_id: CARTESIA_MODEL,
+      transcript,
+      voice: { mode: "id", id: voiceId },
+      output_format: {
+        container: "raw",
+        encoding: "pcm_s16le",
+        sample_rate: sampleRate,
+      },
     }),
   });
-  if (!res.ok) {
-    res = await fetch("https://api.cartesia.ai/tts/bytes", {
-      method: "POST",
-      headers: cartesiaHeaders(),
-      body: JSON.stringify(baseBody),
-    });
-  }
 
   if (!res.ok) {
     throw new Error(`cartesia_tts_failed: ${(await res.text()).slice(0, 200)}`);
@@ -104,7 +90,7 @@ export async function synthesizeCartesiaWavBlob(
     pcmParts.push(await fetchCartesiaPcm(part, 24_000));
   }
 
-  const pcm = boostPcmS16le(Buffer.concat(pcmParts), TTS_PCM_GAIN);
+  const pcm = normalizePcmS16lePeak(Buffer.concat(pcmParts), 0.88);
   return { wav: pcmToWav(pcm, 24_000), segments: parts.length };
 }
 
@@ -127,7 +113,7 @@ export async function synthesizeCartesiaPcmForHeyGen(
     );
   }
 
-  const pcm = boostPcmS16le(Buffer.concat(pcmParts), TTS_PCM_GAIN);
+  const pcm = normalizePcmS16lePeak(Buffer.concat(pcmParts), 0.88);
   return {
     chunks: pcmToBase64Chunks(pcm, HEYGEN_PCM_SAMPLE_RATE),
     segments: parts.length,
