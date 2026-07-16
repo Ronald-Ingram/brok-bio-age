@@ -279,16 +279,38 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       if (audioRef.current) {
         const audio = audioRef.current;
         audio.src = url;
-        // Wait until playback finishes so we can re-arm the mic after BROK is done.
+        // Wait until playback finishes (with timeout — iOS sometimes never fires "ended").
         await new Promise<void>((resolve) => {
+          let settled = false;
           const done = () => {
+            if (settled) return;
+            settled = true;
+            window.clearTimeout(safety);
             audio.removeEventListener("ended", done);
             audio.removeEventListener("error", done);
-            URL.revokeObjectURL(url);
+            audio.removeEventListener("pause", onPauseMaybeDone);
+            try {
+              URL.revokeObjectURL(url);
+            } catch {
+              /* ignore */
+            }
             resolve();
+          };
+          // If playback stalls or iOS drops the ended event, free the UI within ~2 min max.
+          const safety = window.setTimeout(done, 120_000);
+          const onPauseMaybeDone = () => {
+            // Treat near-end pause as done (common iOS quirk).
+            if (
+              audio.duration &&
+              Number.isFinite(audio.duration) &&
+              audio.currentTime >= audio.duration - 0.35
+            ) {
+              done();
+            }
           };
           audio.addEventListener("ended", done);
           audio.addEventListener("error", done);
+          audio.addEventListener("pause", onPauseMaybeDone);
           void audio.play().catch(() => done());
         });
       } else {
@@ -431,24 +453,22 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const rearmVoiceInput = useCallback(() => {
     setMessage("");
     messageRef.current = "";
-    // Never focus or scroll on mobile — iPhone Safari yanks the viewport to top.
-    // Desktop only: soft-focus the empty box.
     const coarse =
       typeof window !== "undefined" &&
       window.matchMedia("(pointer: coarse)").matches;
+    // Desktop: soft-focus empty box. Mobile: never auto-focus (breaks scroll + keyboard).
     if (!coarse) {
       requestAnimationFrame(() => {
         messageInputRef.current?.focus({ preventScroll: true });
       });
     }
     if (!sttSupported || !preferVoiceInputRef.current) return;
-    // Auto re-arm mic. On touch devices wait a bit longer so TTS fully releases.
-    window.setTimeout(
-      () => {
-        if (preferVoiceInputRef.current) startListening();
-      },
-      coarse ? 600 : 280
-    );
+    // Auto re-arm mic on desktop only. On iPhone, auto SpeechRecognition often
+    // leaves the composer dead until refresh — user taps Mic instead.
+    if (coarse) return;
+    window.setTimeout(() => {
+      if (preferVoiceInputRef.current) startListening();
+    }, 280);
   }, [startListening, sttSupported]);
 
   const handleSend = async () => {
@@ -561,6 +581,13 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   };
 
   const hasDialogue = Boolean(response || chatTurns.length);
+  // Mobile: compact when chatting with Avatar off; full-size when Avatar is ON.
+  // Desktop (sm+) always uses the large aspect box — unchanged.
+  const mobileAvatarClass = avatarOn
+    ? "h-[min(52vh,420px)] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
+    : hasDialogue
+      ? "h-[120px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
+      : "h-[168px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]";
 
   return (
     <div
@@ -579,13 +606,8 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         }`}
       >
         <div
-          className={`relative mx-auto w-full max-w-md rounded-xl overflow-hidden border border-neon-cyan/20 bg-black ${
-            stacked
-              ? // Compact after first reply so conversation + composer fit without page scroll.
-                hasDialogue
-                  ? "h-[112px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
-                  : "h-[160px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
-              : "aspect-[3/4] min-h-[420px] max-h-[600px]"
+          className={`relative mx-auto w-full max-w-md rounded-xl overflow-hidden border border-neon-cyan/20 bg-black transition-[height] duration-300 ${
+            stacked ? mobileAvatarClass : "aspect-[3/4] min-h-[420px] max-h-[600px]"
           }`}
         >
           <Image
@@ -713,7 +735,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       <section
         className={`rounded-2xl border border-white/10 bg-bg-card flex flex-col min-h-0 ${
           stacked
-            ? "flex-1 overflow-hidden p-0 sm:p-5 sm:overflow-visible sm:space-y-4 rounded-t-none sm:rounded-t-2xl border-t-0 sm:border-t -mt-px"
+            ? "relative flex-1 overflow-hidden p-0 sm:p-5 sm:overflow-visible sm:space-y-4 rounded-t-none sm:rounded-t-2xl border-t-0 sm:border-t -mt-px"
             : "p-5 space-y-4"
         }`}
       >
@@ -721,7 +743,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         <div
           className={
             stacked
-              ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] px-2 pt-1 pb-2 space-y-3 sm:overflow-visible sm:px-0 sm:pt-0 sm:pb-0 sm:flex-none sm:min-h-0"
+              ? "relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] px-2 pt-1 pb-2 space-y-3 sm:overflow-visible sm:px-0 sm:pt-0 sm:pb-0 sm:flex-none sm:min-h-0"
               : "space-y-3"
           }
         >
@@ -948,11 +970,11 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           )}
         </div>
 
-        {/* Composer: flex footer on mobile (not position:fixed — fixed fights iOS visual viewport). */}
+        {/* Composer: flex footer — high z-index so scroll pane never steals taps on iPhone. */}
         <div
           className={
             stacked
-              ? "shrink-0 border-t border-white/10 bg-bg-card/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:pb-0"
+              ? "relative z-30 shrink-0 border-t border-white/10 bg-bg-card px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pointer-events-auto touch-manipulation sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:pb-0"
               : "block space-y-1.5"
           }
         >
@@ -965,11 +987,15 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 <span className="text-[11px] font-medium text-neon-cyan animate-pulse">
                   ● Listening — Stop, then Send
                 </span>
-              ) : loading || voiceLoading ? (
-                <span className="text-[11px] text-white/45">BROK responding…</span>
+              ) : loading ? (
+                <span className="text-[11px] text-white/45">BROK thinking…</span>
+              ) : voiceLoading ? (
+                <span className="text-[11px] text-white/45">
+                  BROK speaking — you can still type or Mic
+                </span>
               ) : (
-                <span className="text-[11px] text-white/50 hidden sm:inline">
-                  Tap <strong className="text-white/75">Mic</strong> to dictate
+                <span className="text-[11px] text-white/50 sm:inline">
+                  Tap <strong className="text-white/75">Mic</strong> or type
                 </span>
               )}
             </div>
@@ -978,10 +1004,11 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 type="button"
                 onClick={() => {
                   setError(null);
+                  // Always allow mic control even while TTS plays (was blocked by voiceLoading).
                   if (!listening) preferVoiceInputRef.current = true;
                   void toggleListen();
                 }}
-                disabled={loading || voiceLoading}
+                disabled={loading}
                 title={
                   sttSupported
                     ? listening
@@ -991,7 +1018,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 }
                 aria-label={listening ? "Stop microphone" : "Turn on microphone"}
                 aria-pressed={listening}
-                className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] sm:min-w-[4.25rem] px-2 rounded-xl border transition-colors ${
+                className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] sm:min-w-[4.25rem] px-2 rounded-xl border transition-colors touch-manipulation ${
                   listening
                     ? "border-neon-cyan/70 bg-neon-cyan/25 text-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.25)]"
                     : sttSupported
@@ -1014,16 +1041,22 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 ref={messageInputRef}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
+                onFocus={() => {
+                  // Typing wins over dictation — free the field if STT was left on.
+                  if (listening) stopListening();
+                }}
                 rows={2}
                 enterKeyHint="send"
+                // Never disable the box — iOS users reported it dead after first reply.
+                readOnly={false}
                 placeholder={
                   listening
                     ? "Listening… speak now"
-                    : loading || voiceLoading
-                      ? "Waiting for BROK…"
+                    : loading
+                      ? "BROK is thinking…"
                       : "Type or tap Mic…"
                 }
-                className={`flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-black/40 sm:bg-black/30 border text-base sm:text-sm resize-none sm:resize-y min-h-[48px] sm:min-h-[100px] outline-none ${
+                className={`flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-black/40 sm:bg-black/30 border text-base sm:text-sm resize-none sm:resize-y min-h-[48px] sm:min-h-[100px] outline-none touch-manipulation pointer-events-auto ${
                   listening
                     ? "border-neon-cyan/50 focus:border-neon-cyan/60"
                     : "border-white/10 focus:border-neon-cyan/40"
@@ -1037,7 +1070,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                   (!message.trim() && !pendingFiles.length && !fileContexts.length)
                 }
                 onClick={() => void handleSend()}
-                className="shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] px-2 rounded-xl border border-neon-cyan/50 bg-neon-cyan/15 text-neon-cyan text-[10px] font-semibold hover:bg-neon-cyan/25 disabled:opacity-50 sm:hidden"
+                className="shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] px-2 rounded-xl border border-neon-cyan/50 bg-neon-cyan/15 text-neon-cyan text-[10px] font-semibold hover:bg-neon-cyan/25 disabled:opacity-50 touch-manipulation sm:hidden"
                 aria-label="Send to BROK"
               >
                 {loading ? (
