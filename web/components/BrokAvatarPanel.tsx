@@ -112,10 +112,15 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const messageRef = useRef(message);
   messageRef.current = message;
 
+  const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
+  /** True when the user used mic (or we should re-arm) for continuous voice dialogue. */
+  const preferVoiceInputRef = useRef(false);
+
   const {
     listening,
     supported: sttSupported,
     toggle: toggleListen,
+    start: startListening,
     stop: stopListening,
   } = useBrowserSpeechInput({
     getValue: () => messageRef.current,
@@ -182,11 +187,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         localStorage.removeItem(threadStorageKey(user.id));
       }
 
-      const turns = data.messages ?? [];
+      // API returns oldest→newest; UI keeps newest first for heavy-user scanning.
+      const turns = [...(data.messages ?? [])].reverse();
       setChatTurns(turns);
-      const lastAssistant = [...turns]
-        .reverse()
-        .find((m) => m.role === "assistant");
+      const lastAssistant = turns.find((m) => m.role === "assistant");
       setResponse(lastAssistant?.content ?? "");
     } finally {
       setHistoryLoading(false);
@@ -273,8 +277,22 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       if (audioRef.current) {
-        audioRef.current.src = url;
-        await audioRef.current.play();
+        const audio = audioRef.current;
+        audio.src = url;
+        // Wait until playback finishes so we can re-arm the mic after BROK is done.
+        await new Promise<void>((resolve) => {
+          const done = () => {
+            audio.removeEventListener("ended", done);
+            audio.removeEventListener("error", done);
+            URL.revokeObjectURL(url);
+            resolve();
+          };
+          audio.addEventListener("ended", done);
+          audio.addEventListener("error", done);
+          void audio.play().catch(() => done());
+        });
+      } else {
+        URL.revokeObjectURL(url);
       }
     } finally {
       setVoiceLoading(false);
@@ -410,12 +428,34 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     }
   };
 
+  const rearmVoiceInput = useCallback(() => {
+    setMessage("");
+    messageRef.current = "";
+    // Focus so heavy users can type or see the empty box immediately.
+    requestAnimationFrame(() => {
+      messageInputRef.current?.focus();
+    });
+    if (!sttSupported || !preferVoiceInputRef.current) return;
+    // Small delay so TTS / avatar release the audio stack before Web Speech starts.
+    window.setTimeout(() => {
+      if (preferVoiceInputRef.current) startListening();
+    }, 280);
+  }, [startListening, sttSupported]);
+
   const handleSend = async () => {
     if (!message.trim() && !pendingFiles.length && !fileContexts.length) return;
+    // If mic is live at send, they are in voice dialogue mode.
+    if (listening) preferVoiceInputRef.current = true;
     stopListening();
     setError(null);
     setLoading(true);
     setResponse("");
+
+    const userMsg =
+      message.trim() || "Analyze the attached file.";
+    // Clear input immediately so the box is empty while BROK works.
+    setMessage("");
+    messageRef.current = "";
 
     try {
       let uploadedIds = [...fileIds];
@@ -428,22 +468,24 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           uploadedIds = uploaded.uploadedIds;
         } catch (e) {
           const hint =
-            message.trim() &&
+            userMsg &&
+            userMsg !== "Analyze the attached file." &&
             " Remove attachments to send text only, or attach PDF/DOCX/txt files.";
+          // Restore draft so they can fix attachments.
+          setMessage(userMsg === "Analyze the attached file." ? "" : userMsg);
           throw new Error(
             (e instanceof Error ? e.message : "upload_failed") + (hint ?? "")
           );
         }
       }
 
-      const userMsg =
-        message.trim() || "Analyze the attached file.";
       const optimisticUser: ChatTurn = {
         id: `pending-user-${Date.now()}`,
         role: "user",
         content: userMsg,
       };
-      setChatTurns((prev) => [...prev, optimisticUser]);
+      // Newest-first storage: prepend so the top of the list is always latest.
+      setChatTurns((prev) => [optimisticUser, ...prev]);
 
       const res = await fetch("/api/brok/chat", {
         method: "POST",
@@ -471,6 +513,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
 
       if (!res.ok) {
         setChatTurns((prev) => prev.filter((t) => t.id !== optimisticUser.id));
+        setMessage(userMsg === "Analyze the attached file." ? "" : userMsg);
         throw new Error(data.hint ?? data.error ?? "chat_failed");
       }
 
@@ -492,13 +535,15 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           localStorage.setItem(threadStorageKey(user.id), data.thread_id);
         }
       }
+      const ts = Date.now();
       setChatTurns((prev) => [
+        { id: `assistant-${ts}`, role: "assistant", content: reply },
+        { id: `user-${ts}`, role: "user", content: userMsg },
         ...prev.filter((t) => t.id !== optimisticUser.id),
-        { id: `user-${Date.now()}`, role: "user", content: userMsg },
-        { id: `assistant-${Date.now()}`, role: "assistant", content: reply },
       ]);
-      setMessage("");
+      // Speak full answer (waits for audio/avatar); then re-arm empty mic box.
       await speakResponse(reply, userMsg);
+      rearmVoiceInput();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Request failed");
     } finally {
@@ -669,12 +714,12 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           </button>
         </div>
 
-        {/* Full latest answer first so mobile users see complete text without hunting history. */}
+        {/* Latest answer + history first (newest on top); input ready below for next turn. */}
         {response && (
           <div className="rounded-xl border border-neon-cyan/25 bg-neon-cyan/5 p-3 sm:p-4 space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-[10px] uppercase tracking-wider text-neon-cyan/80">
-                Full answer (matches spoken text)
+                Latest answer
                 {lastModel ? (
                   <span className="ml-2 normal-case tracking-normal text-white/35">
                     · {lastModel}
@@ -699,6 +744,12 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
 
         {(chatTurns.length > 0 || historyLoading) && (
           <div className="rounded-xl border border-white/8 bg-black/25 p-3 max-h-[min(45vh,420px)] sm:max-h-[min(52vh,520px)] overflow-y-auto space-y-3 min-h-[80px] overscroll-contain">
+            <div className="flex items-center justify-between gap-2 sticky top-0 bg-black/40 backdrop-blur-sm -mx-1 px-1 py-1 z-10">
+              <span className="text-[10px] uppercase tracking-wider text-white/35">
+                Dialogue
+              </span>
+              <span className="text-[10px] text-white/30">Newest first</span>
+            </div>
             {historyLoading && chatTurns.length === 0 ? (
               <p className="text-[11px] text-white/35 flex items-center gap-2">
                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -729,16 +780,20 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         <div className="block space-y-1.5 flex-1">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="text-xs uppercase tracking-wider text-white/40">
-              Your message
+              Your next message
             </span>
             {listening ? (
               <span className="text-[11px] font-medium text-neon-cyan animate-pulse">
-                ● Listening — tap Stop mic when done, then Send
+                ● Listening — tap Stop when done, then Send
+              </span>
+            ) : loading || voiceLoading ? (
+              <span className="text-[11px] text-white/45">
+                BROK is responding… box clears for your next turn
               </span>
             ) : (
               <span className="text-[11px] text-white/50">
-                Tap <strong className="text-white/75">Mic</strong> left of the box
-                to dictate
+                Tap <strong className="text-white/75">Mic</strong> to dictate
+                (re-arms after BROK finishes if you used mic)
               </span>
             )}
           </div>
@@ -747,9 +802,11 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               type="button"
               onClick={() => {
                 setError(null);
+                // Once they open Mic, keep re-arming after each BROK reply (hands-free loop).
+                if (!listening) preferVoiceInputRef.current = true;
                 void toggleListen();
               }}
-              disabled={loading}
+              disabled={loading || voiceLoading}
               title={
                 sttSupported
                   ? listening
@@ -779,13 +836,16 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               </span>
             </button>
             <textarea
+              ref={messageInputRef}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows={4}
               placeholder={
                 listening
                   ? "Listening… speak now"
-                  : "Type here — or tap Mic to speak your question"
+                  : loading || voiceLoading
+                    ? "Waiting for BROK… then speak or type the next question"
+                    : "Type here — or tap Mic to speak your question"
               }
               className={`flex-1 min-w-0 px-4 py-3 rounded-xl bg-black/30 border text-sm resize-y min-h-[100px] outline-none ${
                 listening
@@ -795,10 +855,11 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             />
           </div>
           <p className="text-[11px] text-white/45 leading-snug">
-            <strong className="text-white/65">Mic</strong> = you speak → text
-            fills this box → press Send. That is separate from the{" "}
-            <strong className="text-white/65">Voice / Avatar</strong> toggles
-            (those make BROK talk back).
+            <strong className="text-white/65">Mic</strong> → speak → Send. Input
+            clears on send; after BROK finishes speaking, mic re-arms for the
+            next question.{" "}
+            <strong className="text-white/65">Voice / Avatar</strong> = BROK
+            talks back (separate).
             {!sttSupported && (
               <span className="text-amber-200/80">
                 {" "}

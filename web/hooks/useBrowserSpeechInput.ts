@@ -73,7 +73,7 @@ export function useBrowserSpeechInput(opts: {
     setListening(false);
   }, []);
 
-  const toggle = useCallback(() => {
+  const start = useCallback(() => {
     const Ctor = getSpeechRecognitionCtor();
     if (!Ctor) {
       optsRef.current.onError?.(
@@ -82,10 +82,8 @@ export function useBrowserSpeechInput(opts: {
       return;
     }
 
-    if (listening) {
-      stop();
-      return;
-    }
+    // Already listening — leave session alone.
+    if (recognitionRef.current) return;
 
     baseRef.current = optsRef.current.getValue().trim();
     const rec = new Ctor();
@@ -131,6 +129,7 @@ export function useBrowserSpeechInput(opts: {
         );
       }
       setListening(false);
+      recognitionRef.current = null;
     };
 
     rec.onend = () => {
@@ -146,8 +145,17 @@ export function useBrowserSpeechInput(opts: {
         "Could not start microphone — try again or type your message."
       );
       setListening(false);
+      recognitionRef.current = null;
     }
-  }, [listening, stop]);
+  }, []);
 
-  return { listening, supported, toggle, stop };
+  const toggle = useCallback(() => {
+    if (listening || recognitionRef.current) {
+      stop();
+      return;
+    }
+    start();
+  }, [listening, start, stop]);
+
+  return { listening, supported, toggle, start, stop };
 }
