@@ -8,8 +8,18 @@ import {
   emptyCanvasAnswers,
   type CanvasAnswers,
 } from "@/lib/businessCanvas";
-import { ChevronLeft, ChevronRight, Download, LayoutGrid, Printer, X } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  Download,
+  LayoutGrid,
+  Lightbulb,
+  Printer,
+  X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface BusinessCanvasPanelProps {
   open: boolean;
@@ -29,6 +39,8 @@ export function BusinessCanvasPanel({ open, onClose }: BusinessCanvasPanelProps)
   const [answers, setAnswers] = useState<CanvasAnswers>(emptyCanvasAnswers);
   const [done, setDone] = useState(false);
   const [showNv, setShowNv] = useState(false);
+  /** Detailed tip open by default so workshop founders see guidance without hover. */
+  const [tipOpen, setTipOpen] = useState(true);
 
   const q = CANVAS_QUESTIONS[step];
   const total = CANVAS_QUESTIONS.length;
@@ -39,11 +51,17 @@ export function BusinessCanvasPanel({ open, onClose }: BusinessCanvasPanelProps)
     [done, answers]
   );
 
+  // Re-open the tip when the question changes so each step’s guidance is visible.
+  useEffect(() => {
+    setTipOpen(true);
+  }, [step]);
+
   const reset = useCallback(() => {
     setStep(0);
     setAnswers(emptyCanvasAnswers());
     setDone(false);
     setShowNv(false);
+    setTipOpen(true);
   }, []);
 
   const close = () => {
@@ -105,7 +123,7 @@ export function BusinessCanvasPanel({ open, onClose }: BusinessCanvasPanelProps)
       aria-modal="true"
       aria-labelledby="bmc-title"
     >
-      <div className="w-full sm:max-w-lg max-h-[92vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-white/10 bg-bg-card shadow-2xl overflow-hidden">
+      <div className="w-full sm:max-w-xl max-h-[92vh] flex flex-col rounded-t-2xl sm:rounded-2xl border border-white/10 bg-bg-card shadow-2xl overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-white/10">
           <div>
             <p className="text-[10px] uppercase tracking-[0.2em] text-neon-cyan mb-1">
@@ -141,19 +159,86 @@ export function BusinessCanvasPanel({ open, onClose }: BusinessCanvasPanelProps)
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
           {!done && q && (
             <>
-              <p className="text-sm font-medium text-white/90 leading-relaxed">
-                {q.prompt}
-              </p>
-              {q.hint && (
-                <p className="text-xs text-white/40">{q.hint}</p>
-              )}
+              <div className="space-y-1.5">
+                <div className="flex items-start gap-2">
+                  <p className="text-sm font-medium text-white/90 leading-relaxed flex-1">
+                    {q.prompt}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setTipOpen((v) => !v)}
+                    className={`shrink-0 mt-0.5 p-1.5 rounded-lg border transition-colors ${
+                      tipOpen
+                        ? "border-neon-cyan/40 bg-neon-cyan/15 text-neon-cyan"
+                        : "border-white/15 bg-white/5 text-white/45 hover:text-neon-cyan hover:border-neon-cyan/30"
+                    }`}
+                    aria-expanded={tipOpen}
+                    aria-controls={`bmc-tip-${q.id}`}
+                    title={
+                      tipOpen
+                        ? "Hide explanation"
+                        : "Show detailed explanation for this question"
+                    }
+                  >
+                    <CircleHelp className="w-4 h-4" />
+                  </button>
+                </div>
+                {q.hint && (
+                  <p className="text-xs text-white/45">{q.hint}</p>
+                )}
+                {q.canvasCell && (
+                  <p className="text-[10px] uppercase tracking-wider text-white/30">
+                    Canvas cell · {q.canvasCell}
+                  </p>
+                )}
+              </div>
+
+              <div
+                id={`bmc-tip-${q.id}`}
+                className="rounded-xl border border-white/10 bg-black/30 overflow-hidden"
+              >
+                <button
+                  type="button"
+                  onClick={() => setTipOpen((v) => !v)}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-white/[0.03]"
+                  aria-expanded={tipOpen}
+                >
+                  <span className="inline-flex items-center gap-2 text-xs font-medium text-neon-cyan/90">
+                    <Lightbulb className="w-3.5 h-3.5 shrink-0" />
+                    Why this matters — how to answer
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-white/40 transition-transform ${
+                      tipOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+                {tipOpen && (
+                  <div className="px-3 pb-3 space-y-2.5 border-t border-white/5">
+                    <p className="text-xs text-white/60 whitespace-pre-wrap leading-relaxed pt-2.5">
+                      {q.tip}
+                    </p>
+                    {q.example && (
+                      <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-2.5 py-2">
+                        <p className="text-[10px] uppercase tracking-wider text-emerald-200/70 mb-1">
+                          Example (illustration only)
+                        </p>
+                        <p className="text-xs text-emerald-50/85 leading-relaxed">
+                          {q.example}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <textarea
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                rows={5}
+                rows={4}
                 autoFocus
-                placeholder="Type or use the chat mic first, then paste here…"
-                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-sm resize-y min-h-[120px] focus:border-neon-cyan/40 outline-none"
+                placeholder="Type your answer… (mic in chat first, then paste here if useful)"
+                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-sm resize-y min-h-[100px] focus:border-neon-cyan/40 outline-none"
               />
             </>
           )}
