@@ -584,24 +584,133 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   // Mobile: compact when chatting with Avatar off; full-size when Avatar is ON.
   // Desktop (sm+) always uses the large aspect box — unchanged.
   const mobileAvatarClass = avatarOn
-    ? "h-[min(52vh,420px)] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
+    ? "h-[min(48vh,380px)] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
     : hasDialogue
-      ? "h-[120px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
-      : "h-[168px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]";
+      ? "h-[140px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
+      : "h-[180px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]";
+
+  const composer = (
+    <div className="space-y-2 rounded-xl border border-neon-cyan/30 bg-black/35 p-3 sm:border-white/10 sm:bg-transparent sm:p-0">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <span className="text-xs uppercase tracking-wider text-neon-cyan/90 sm:text-white/40">
+          Your message
+        </span>
+        {listening ? (
+          <span className="text-[11px] font-medium text-neon-cyan animate-pulse">
+            ● Listening — Stop, then Send
+          </span>
+        ) : loading ? (
+          <span className="text-[11px] text-white/45">BROK thinking…</span>
+        ) : voiceLoading ? (
+          <span className="text-[11px] text-white/45">BROK speaking…</span>
+        ) : (
+          <span className="text-[11px] text-white/55">
+            Tap <strong className="text-white/80">Mic</strong> or type
+          </span>
+        )}
+      </div>
+      <div className="flex gap-2 items-stretch">
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            if (!listening) preferVoiceInputRef.current = true;
+            void toggleListen();
+          }}
+          disabled={loading}
+          title={
+            sttSupported
+              ? listening
+                ? "Stop microphone"
+                : "Turn on microphone"
+              : "Dictation needs Chrome or Edge"
+          }
+          aria-label={listening ? "Stop microphone" : "Turn on microphone"}
+          aria-pressed={listening}
+          className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] sm:min-w-[4.25rem] px-2 rounded-xl border transition-colors touch-manipulation ${
+            listening
+              ? "border-neon-cyan/70 bg-neon-cyan/25 text-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.25)]"
+              : sttSupported
+                ? "border-neon-cyan/40 bg-neon-cyan/15 text-neon-cyan"
+                : "border-white/10 bg-black/20 text-white/30"
+          }`}
+        >
+          {listening ? (
+            <Mic className="w-5 h-5 animate-pulse" />
+          ) : sttSupported ? (
+            <Mic className="w-5 h-5" />
+          ) : (
+            <MicOff className="w-5 h-5" />
+          )}
+          <span className="text-[10px] font-semibold leading-none">
+            {listening ? "Stop" : "Mic"}
+          </span>
+        </button>
+        <textarea
+          ref={messageInputRef}
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onFocus={() => {
+            if (listening) stopListening();
+          }}
+          rows={3}
+          enterKeyHint="send"
+          autoComplete="off"
+          autoCorrect="on"
+          placeholder={
+            listening
+              ? "Listening… speak now"
+              : loading
+                ? "BROK is thinking…"
+                : "Type or tap Mic to speak…"
+          }
+          className={`flex-1 min-w-0 px-3 py-3 rounded-xl bg-black/50 border text-base sm:text-sm resize-y min-h-[88px] sm:min-h-[100px] outline-none touch-manipulation ${
+            listening
+              ? "border-neon-cyan/50 focus:border-neon-cyan/60"
+              : "border-white/15 focus:border-neon-cyan/40"
+          }`}
+        />
+        <button
+          type="button"
+          disabled={
+            loading ||
+            iemReportLoading ||
+            (!message.trim() && !pendingFiles.length && !fileContexts.length)
+          }
+          onClick={() => void handleSend()}
+          className="shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] px-2 rounded-xl border border-neon-cyan/50 bg-neon-cyan/20 text-neon-cyan text-[10px] font-semibold disabled:opacity-50 touch-manipulation sm:hidden"
+          aria-label="Send to BROK"
+        >
+          {loading ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Send className="w-5 h-5" />
+          )}
+          Send
+        </button>
+      </div>
+      <p className="text-[10px] text-white/40 leading-snug hidden sm:block">
+        <strong className="text-white/60">Mic</strong> → speak → Send.{" "}
+        <strong className="text-white/60">Voice / Avatar</strong> = BROK talks back.
+        {!sttSupported && (
+          <span className="text-amber-200/80"> Dictation needs Chrome or Edge.</span>
+        )}
+      </p>
+    </div>
+  );
 
   return (
     <div
       className={
         stacked
-          ? // Mobile: locked flex shell — only middle pane scrolls (no document bounce).
-            "flex h-full min-h-0 flex-col gap-0 overflow-hidden sm:h-auto sm:min-h-0 sm:overflow-visible sm:gap-1 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-6"
+          ? "flex flex-col gap-0 sm:gap-1 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-6"
           : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]"
       }
     >
       <section
         className={`rounded-2xl border border-white/10 bg-bg-card space-y-2 sm:space-y-3 ${
           stacked
-            ? "shrink-0 p-2 pb-1 sm:p-5 sm:space-y-4 rounded-b-none sm:rounded-b-2xl border-b-0 sm:border-b"
+            ? "p-2 pb-1 sm:p-5 rounded-b-none sm:rounded-b-2xl border-b-0 sm:border-b"
             : "p-5 space-y-4"
         }`}
       >
@@ -615,10 +724,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             alt="BROK static avatar"
             fill
             className={`object-contain object-center transition-opacity duration-300 ${
-              // Keep live video visible during speech — never cover it with the static plate while voiceLoading.
-              useHeyGenLive && heygenLive && avatarOn
-                ? "opacity-0"
-                : "opacity-100"
+              useHeyGenLive && heygenLive && avatarOn ? "opacity-0" : "opacity-100"
             }`}
             priority
           />
@@ -637,9 +743,9 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             </div>
           ) : null}
           {!avatarOn && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-end pb-6 bg-black/25 pointer-events-none">
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-end pb-4 bg-black/25 pointer-events-none">
               <p className="rounded-full border border-white/15 bg-black/50 px-3 py-1 text-[10px] text-white/50">
-                Avatar off — static image · saves session credits
+                Avatar off · saves credits
               </p>
             </div>
           )}
@@ -651,209 +757,199 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         </div>
 
         <div className={stacked ? "hidden sm:block space-y-3" : "space-y-3"}>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setVoiceOn((v) => !v)}
-            disabled={useHeyGenLive}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border transition-colors ${
-              voiceOn && !useHeyGenLive
-                ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
-                : "border-white/15 text-white/45"
-            } ${useHeyGenLive ? "opacity-50 cursor-not-allowed" : ""}`}
-          >
-            {voiceOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-            Voice {voiceOn ? "on" : "off"}
-            <span className="text-white/35">
-              ({status?.voiceLabel ?? voiceDisplayName(status ?? {})})
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setAvatarOn((v) => !v)}
-            className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border transition-colors ${
-              avatarOn
-                ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
-                : "border-white/15 text-white/45"
-            }`}
-          >
-            {avatarOn ? <User className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
-            Avatar {avatarOn ? "on" : "off"}
-            <span className="text-white/35">({status?.avatarLabel ?? BROK_AVATAR_LABEL})</span>
-          </button>
-        </div>
-
-        <p className="text-[11px] text-white/40 leading-relaxed">
-          {useHeyGenLive && heygenLive
-            ? status?.voiceReady
-              ? `${BROK_AVATAR_LABEL} live — lip-sync with ${status.voiceLabel ?? BROK_VOICE_CLONE_LABEL}. Toggle off to end session.`
-              : `${BROK_AVATAR_LABEL} speaking — enable BROK Voice for lip-sync.`
-            : useHeyGenLive
-              ? `${BROK_AVATAR_LABEL} connecting… Toggle off anytime to stop the live session and save credits.`
-              : "Toggle voice or avatar off for text-only. Ask for full length to hear complete answers."}
-        </p>
-        {status && !status.voiceReady && (
-          <p className="text-[11px] text-amber-300/80 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
-            {status.voiceCloneHint ??
-              `Connect Neobanx voice service for ${BROK_VOICE_CLONE_LABEL}.`}
-          </p>
-        )}
-
-        {status && !status.chatReady && (
-          <p className="text-xs text-amber-400/90 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
-            BROK Intelligence unavailable — contact Neobanx support.
-          </p>
-        )}
-        {status && status.chatReady && status.routingSummary && (
-          <p className="text-xs text-white/40 border border-white/10 rounded-lg px-3 py-2">
-            {status.routingSummary}. IEM scorecard · Inneagram · up to {MAX_ATTACHMENTS} files.
-          </p>
-        )}
-        {status?.voiceReady && (
-          <p className="text-[10px] text-white/40">
-            {status.voiceLabel ?? BROK_VOICE_CLONE_LABEL} → {status.avatarLabel ?? BROK_AVATAR_LABEL}
-          </p>
-        )}
-        {fileContexts.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 text-[10px] text-emerald-400/80">
-            <span>
-              In context ({fileContexts.length}):{" "}
-              {fileContexts.map((f) => f.filename).join(", ")}
-            </span>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={clearAttachedContext}
-              className="text-white/35 hover:text-white/60 underline"
+              onClick={() => setVoiceOn((v) => !v)}
+              disabled={useHeyGenLive}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border transition-colors ${
+                voiceOn && !useHeyGenLive
+                  ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
+                  : "border-white/15 text-white/45"
+              } ${useHeyGenLive ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              Clear
+              {voiceOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+              Voice {voiceOn ? "on" : "off"}
+              <span className="text-white/35">
+                ({status?.voiceLabel ?? voiceDisplayName(status ?? {})})
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAvatarOn((v) => !v)}
+              className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border transition-colors ${
+                avatarOn
+                  ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
+                  : "border-white/15 text-white/45"
+              }`}
+            >
+              {avatarOn ? <User className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+              Avatar {avatarOn ? "on" : "off"}
+              <span className="text-white/35">
+                ({status?.avatarLabel ?? BROK_AVATAR_LABEL})
+              </span>
             </button>
           </div>
-        )}
+          <p className="text-[11px] text-white/40 leading-relaxed">
+            {useHeyGenLive && heygenLive
+              ? status?.voiceReady
+                ? `${BROK_AVATAR_LABEL} live — lip-sync with ${status.voiceLabel ?? BROK_VOICE_CLONE_LABEL}.`
+                : `${BROK_AVATAR_LABEL} speaking — enable BROK Voice for lip-sync.`
+              : useHeyGenLive
+                ? `${BROK_AVATAR_LABEL} connecting…`
+                : "Toggle voice or avatar off for text-only."}
+          </p>
+          {status && !status.voiceReady && (
+            <p className="text-[11px] text-amber-300/80 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
+              {status.voiceCloneHint ??
+                `Connect Neobanx voice service for ${BROK_VOICE_CLONE_LABEL}.`}
+            </p>
+          )}
+          {status && !status.chatReady && (
+            <p className="text-xs text-amber-400/90 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
+              BROK Intelligence unavailable — contact Neobanx support.
+            </p>
+          )}
+          {status && status.chatReady && status.routingSummary && (
+            <p className="text-xs text-white/40 border border-white/10 rounded-lg px-3 py-2">
+              {status.routingSummary}. IEM · Inneagram · up to {MAX_ATTACHMENTS} files.
+            </p>
+          )}
+          {fileContexts.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-[10px] text-emerald-400/80">
+              <span>
+                In context ({fileContexts.length}):{" "}
+                {fileContexts.map((f) => f.filename).join(", ")}
+              </span>
+              <button
+                type="button"
+                onClick={clearAttachedContext}
+                className="text-white/35 hover:text-white/60 underline"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
+      {/* Mobile: Avatar → answer → input → history. Desktop: answer → history → input. */}
       <section
-        className={`rounded-2xl border border-white/10 bg-bg-card flex flex-col min-h-0 ${
+        className={`rounded-2xl border border-white/10 bg-bg-card flex flex-col gap-3 ${
           stacked
-            ? "relative flex-1 overflow-hidden p-0 sm:p-5 sm:overflow-visible sm:space-y-4 rounded-t-none sm:rounded-t-2xl border-t-0 sm:border-t -mt-px"
+            ? "p-2 pt-2 sm:p-5 rounded-t-none sm:rounded-t-2xl border-t-0 sm:border-t -mt-px"
             : "p-5 space-y-4"
         }`}
       >
-        {/* Mobile: ONE scroll region for answers/tools. Composer stays pinned in flex footer. */}
-        <div
-          className={
-            stacked
-              ? "relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] px-2 pt-1 pb-2 space-y-3 sm:overflow-visible sm:px-0 sm:pt-0 sm:pb-0 sm:flex-none sm:min-h-0"
-              : "space-y-3"
-          }
-        >
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs uppercase tracking-wider text-white/40">
-              Conversation
-            </span>
+        <div className="flex items-center justify-between gap-2 order-1">
+          <span className="text-xs uppercase tracking-wider text-white/40">
+            Conversation
+          </span>
+          <button
+            type="button"
+            onClick={() => void startNewConversation()}
+            disabled={!user?.id || loading}
+            className="text-[10px] text-white/40 hover:text-neon-cyan/80 underline disabled:opacity-40"
+          >
+            New conversation
+          </button>
+        </div>
+
+        {stacked && (
+          <div className="flex flex-wrap gap-2 order-1 sm:hidden">
             <button
               type="button"
-              onClick={() => void startNewConversation()}
-              disabled={!user?.id || loading}
-              className="text-[10px] text-white/40 hover:text-neon-cyan/80 underline disabled:opacity-40"
+              onClick={() => setVoiceOn((v) => !v)}
+              disabled={useHeyGenLive}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border transition-colors ${
+                voiceOn && !useHeyGenLive
+                  ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
+                  : "border-white/15 text-white/45"
+              } ${useHeyGenLive ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              New conversation
+              {voiceOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+              Voice
+            </button>
+            <button
+              type="button"
+              onClick={() => setAvatarOn((v) => !v)}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border transition-colors ${
+                avatarOn
+                  ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
+                  : "border-white/15 text-white/45"
+              }`}
+            >
+              {avatarOn ? <User className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
+              Avatar
             </button>
           </div>
+        )}
 
-          {response && (
-            <div className="rounded-xl border border-neon-cyan/25 bg-neon-cyan/5 p-3 sm:p-4 space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="text-[10px] uppercase tracking-wider text-neon-cyan/80">
-                  Latest answer
-                  {lastModel ? (
-                    <span className="ml-2 normal-case tracking-normal text-white/35">
-                      · {lastModel}
-                    </span>
-                  ) : null}
-                </span>
-                <button
-                  type="button"
-                  className="text-[10px] text-white/40 hover:text-white/70 underline"
-                  onClick={() => {
-                    void navigator.clipboard?.writeText(response);
-                  }}
-                >
-                  Copy full text
-                </button>
-              </div>
-              {/* No nested scroll on mobile — parent pane scrolls the full answer. */}
-              <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed sm:max-h-[min(40vh,360px)] sm:overflow-y-auto sm:overscroll-contain">
-                {response}
+        {response ? (
+          <div className="order-2 rounded-xl border border-neon-cyan/25 bg-neon-cyan/5 p-3 sm:p-4 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="text-[10px] uppercase tracking-wider text-neon-cyan/80">
+                Latest answer
+                {lastModel ? (
+                  <span className="ml-2 normal-case tracking-normal text-white/35">
+                    · {lastModel}
+                  </span>
+                ) : null}
+              </span>
+              <button
+                type="button"
+                className="text-[10px] text-white/40 hover:text-white/70 underline"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(response);
+                }}
+              >
+                Copy full text
+              </button>
+            </div>
+            <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed sm:max-h-[min(40vh,360px)] sm:overflow-y-auto">
+              {response}
+            </p>
+          </div>
+        ) : null}
+
+        <div className="order-3 sm:order-4">{composer}</div>
+
+        {(chatTurns.length > 0 || historyLoading) && (
+          <div className="order-4 sm:order-3 rounded-xl border border-white/8 bg-black/25 p-3 space-y-3 min-h-[80px] sm:max-h-[min(52vh,520px)] sm:overflow-y-auto">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] uppercase tracking-wider text-white/35">
+                Earlier dialogue
+              </span>
+              <span className="text-[10px] text-white/30">Newest first</span>
+            </div>
+            {historyLoading && chatTurns.length === 0 ? (
+              <p className="text-[11px] text-white/35 flex items-center gap-2">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Loading history…
               </p>
-            </div>
-          )}
+            ) : (
+              chatTurns.map((turn) => (
+                <div
+                  key={turn.id}
+                  className={
+                    turn.role === "user"
+                      ? "text-sm text-white/55 pl-2 border-l-2 border-neon-cyan/30"
+                      : "text-sm text-white/80 pl-2 border-l-2 border-white/15"
+                  }
+                >
+                  <span className="text-[10px] uppercase tracking-wider text-white/30 block mb-0.5">
+                    {turn.role === "user" ? "You" : "BROK"}
+                  </span>
+                  <p className="whitespace-pre-wrap leading-relaxed break-words">
+                    {turn.content}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
-          {(chatTurns.length > 0 || historyLoading) && (
-            <div className="rounded-xl border border-white/8 bg-black/25 p-3 space-y-3 min-h-[80px] sm:max-h-[min(52vh,520px)] sm:overflow-y-auto sm:overscroll-contain">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] uppercase tracking-wider text-white/35">
-                  Dialogue
-                </span>
-                <span className="text-[10px] text-white/30">Newest first</span>
-              </div>
-              {historyLoading && chatTurns.length === 0 ? (
-                <p className="text-[11px] text-white/35 flex items-center gap-2">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Loading history…
-                </p>
-              ) : (
-                chatTurns.map((turn) => (
-                  <div
-                    key={turn.id}
-                    className={
-                      turn.role === "user"
-                        ? "text-sm text-white/55 pl-2 border-l-2 border-neon-cyan/30"
-                        : "text-sm text-white/80 pl-2 border-l-2 border-white/15"
-                    }
-                  >
-                    <span className="text-[10px] uppercase tracking-wider text-white/30 block mb-0.5">
-                      {turn.role === "user" ? "You" : "BROK"}
-                    </span>
-                    <p className="whitespace-pre-wrap leading-relaxed break-words">
-                      {turn.content}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {stacked && (
-            <div className="flex flex-wrap gap-2 sm:hidden">
-              <button
-                type="button"
-                onClick={() => setVoiceOn((v) => !v)}
-                disabled={useHeyGenLive}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] border transition-colors ${
-                  voiceOn && !useHeyGenLive
-                    ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
-                    : "border-white/15 text-white/45"
-                } ${useHeyGenLive ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                {voiceOn ? <Mic className="w-3 h-3" /> : <MicOff className="w-3 h-3" />}
-                Voice
-              </button>
-              <button
-                type="button"
-                onClick={() => setAvatarOn((v) => !v)}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] border transition-colors ${
-                  avatarOn
-                    ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
-                    : "border-white/15 text-white/45"
-                }`}
-              >
-                {avatarOn ? <User className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
-                Avatar
-              </button>
-            </div>
-          )}
-
+        <div className="order-5 space-y-3">
           <label className="flex items-center gap-3 rounded-xl border border-dashed border-white/15 px-4 py-3 cursor-pointer hover:border-neon-cyan/30 transition-colors">
             <FileUp className="w-5 h-5 text-neon-cyan shrink-0" />
             <span className="text-sm text-white/55 flex-1">
@@ -921,7 +1017,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 (!message.trim() && !pendingFiles.length && !fileContexts.length)
               }
               onClick={handleGenerateIemReport}
-              title="Generate a formatted IEM report (HTML, Markdown, or Print/PDF)"
+              title="Generate a formatted IEM report"
               className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white/5 border border-white/15 text-white/80 text-sm font-medium hover:bg-white/10 hover:border-neon-cyan/30 disabled:opacity-50 transition-colors"
             >
               {iemReportLoading ? (
@@ -949,8 +1045,8 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             </button>
           </div>
           <p className="text-[10px] text-white/35">
-            Business Canvas = workshop BMC one-pager (PDF via Print). IEM = deal scorecard.
-            Inneagram = archetype profile. Canvas/IEM/Inneagram: no voice/avatar tokens.
+            Business Canvas = workshop BMC. IEM = deal scorecard. Inneagram = archetype.
+            No voice/avatar tokens for those tools.
           </p>
 
           {(error || ((voiceOn || useHeyGenLive) && response)) && (
@@ -962,138 +1058,12 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                   {voiceLoading
                     ? speakProgress ?? "Generating speech…"
                     : useHeyGenLive
-                      ? "Avatar speaks the full answer (same text as above)"
-                      : "Voice speaks the full answer (same text as above)"}
+                      ? "Avatar speaks the full answer"
+                      : "Voice speaks the full answer"}
                 </p>
               )}
             </div>
           )}
-        </div>
-
-        {/* Composer: flex footer — high z-index so scroll pane never steals taps on iPhone. */}
-        <div
-          className={
-            stacked
-              ? "relative z-30 shrink-0 border-t border-white/10 bg-bg-card px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pointer-events-auto touch-manipulation sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:pb-0"
-              : "block space-y-1.5"
-          }
-        >
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-xs uppercase tracking-wider text-white/40">
-                Your next message
-              </span>
-              {listening ? (
-                <span className="text-[11px] font-medium text-neon-cyan animate-pulse">
-                  ● Listening — Stop, then Send
-                </span>
-              ) : loading ? (
-                <span className="text-[11px] text-white/45">BROK thinking…</span>
-              ) : voiceLoading ? (
-                <span className="text-[11px] text-white/45">
-                  BROK speaking — you can still type or Mic
-                </span>
-              ) : (
-                <span className="text-[11px] text-white/50 sm:inline">
-                  Tap <strong className="text-white/75">Mic</strong> or type
-                </span>
-              )}
-            </div>
-            <div className="flex gap-2 items-stretch">
-              <button
-                type="button"
-                onClick={() => {
-                  setError(null);
-                  // Always allow mic control even while TTS plays (was blocked by voiceLoading).
-                  if (!listening) preferVoiceInputRef.current = true;
-                  void toggleListen();
-                }}
-                disabled={loading}
-                title={
-                  sttSupported
-                    ? listening
-                      ? "Stop microphone"
-                      : "Turn on microphone — speak; text appears in the box"
-                    : "Voice input not supported here — use Chrome or Edge"
-                }
-                aria-label={listening ? "Stop microphone" : "Turn on microphone"}
-                aria-pressed={listening}
-                className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] sm:min-w-[4.25rem] px-2 rounded-xl border transition-colors touch-manipulation ${
-                  listening
-                    ? "border-neon-cyan/70 bg-neon-cyan/25 text-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.25)]"
-                    : sttSupported
-                      ? "border-neon-cyan/35 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 hover:border-neon-cyan/55"
-                      : "border-white/10 bg-black/20 text-white/30 cursor-not-allowed"
-                }`}
-              >
-                {listening ? (
-                  <Mic className="w-5 h-5 animate-pulse" />
-                ) : sttSupported ? (
-                  <Mic className="w-5 h-5" />
-                ) : (
-                  <MicOff className="w-5 h-5" />
-                )}
-                <span className="text-[10px] font-semibold leading-none">
-                  {listening ? "Stop" : "Mic"}
-                </span>
-              </button>
-              <textarea
-                ref={messageInputRef}
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onFocus={() => {
-                  // Typing wins over dictation — free the field if STT was left on.
-                  if (listening) stopListening();
-                }}
-                rows={2}
-                enterKeyHint="send"
-                // Never disable the box — iOS users reported it dead after first reply.
-                readOnly={false}
-                placeholder={
-                  listening
-                    ? "Listening… speak now"
-                    : loading
-                      ? "BROK is thinking…"
-                      : "Type or tap Mic…"
-                }
-                className={`flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-black/40 sm:bg-black/30 border text-base sm:text-sm resize-none sm:resize-y min-h-[48px] sm:min-h-[100px] outline-none touch-manipulation pointer-events-auto ${
-                  listening
-                    ? "border-neon-cyan/50 focus:border-neon-cyan/60"
-                    : "border-white/10 focus:border-neon-cyan/40"
-                }`}
-              />
-              <button
-                type="button"
-                disabled={
-                  loading ||
-                  iemReportLoading ||
-                  (!message.trim() && !pendingFiles.length && !fileContexts.length)
-                }
-                onClick={() => void handleSend()}
-                className="shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] px-2 rounded-xl border border-neon-cyan/50 bg-neon-cyan/15 text-neon-cyan text-[10px] font-semibold hover:bg-neon-cyan/25 disabled:opacity-50 touch-manipulation sm:hidden"
-                aria-label="Send to BROK"
-              >
-                {loading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Send className="w-5 h-5" />
-                )}
-                Send
-              </button>
-            </div>
-            <p className="text-[10px] text-white/40 leading-snug hidden sm:block">
-              <strong className="text-white/60">Mic</strong> → speak → Send.
-              Clears on send; re-arms after BROK finishes if you used mic.{" "}
-              <strong className="text-white/60">Voice / Avatar</strong> = BROK talks
-              back.
-              {!sttSupported && (
-                <span className="text-amber-200/80">
-                  {" "}
-                  Dictation needs Chrome or Edge.
-                </span>
-              )}
-            </p>
-          </div>
         </div>
 
         <audio ref={audioRef} className="hidden" />
