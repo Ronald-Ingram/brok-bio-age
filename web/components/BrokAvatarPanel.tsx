@@ -7,6 +7,7 @@ import {
 import { BusinessCanvasPanel } from "@/components/BusinessCanvasPanel";
 import { InneagramPanel } from "@/components/InneagramPanel";
 import { IemReportModal } from "@/components/IemReportModal";
+import { forceFullMediaVolume } from "@/lib/audioGain";
 import { sanitizeBrokAvatarError } from "@/lib/brokAvatarErrors";
 import { BROK_REFERENCE_IMAGE } from "@/lib/brokApiConfig";
 import type { IemReportPayload } from "@/lib/iemReportTypes";
@@ -279,6 +280,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       if (audioRef.current) {
         const audio = audioRef.current;
         audio.src = url;
+        forceFullMediaVolume(audio);
         // Wait until playback finishes (with timeout — iOS sometimes never fires "ended").
         await new Promise<void>((resolve) => {
           let settled = false;
@@ -311,6 +313,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           audio.addEventListener("ended", done);
           audio.addEventListener("error", done);
           audio.addEventListener("pause", onPauseMaybeDone);
+          forceFullMediaVolume(audio);
           void audio.play().catch(() => done());
         });
       } else {
@@ -1066,7 +1069,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           )}
         </div>
 
-        <audio ref={audioRef} className="hidden" />
+        <audio ref={audioRef} playsInline preload="auto" className="hidden" />
       </section>
 
       <IemReportModal payload={iemReport} onClose={() => setIemReport(null)} />

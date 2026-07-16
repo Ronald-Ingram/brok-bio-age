@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { forceFullMediaVolume } from "@/lib/audioGain";
 import { sanitizeBrokAvatarError } from "@/lib/brokAvatarErrors";
 import { brokAuthHeaders } from "@/lib/authFetch";
 import { BROK_REFERENCE_IMAGE } from "@/lib/brokApiConfig";
@@ -258,6 +259,8 @@ export const HeyGenLiveAvatar = forwardRef<
         }
         if (track.kind === Track.Kind.Audio && audioRef.current) {
           track.attach(audioRef.current);
+          // Always full volume — mobile may leave elements muted after autoplay dance.
+          forceFullMediaVolume(audioRef.current);
           void audioRef.current.play().catch(() => null);
         }
       };
@@ -328,14 +331,16 @@ export const HeyGenLiveAvatar = forwardRef<
 
       setStat("live");
       setConnectError(null);
-      // Mobile: start muted until speak (user gesture) to satisfy autoplay policies.
+      // Video can stay muted for autoplay; room audio is unmuted on speak().
       if (videoRef.current) {
-        videoRef.current.muted = mobile;
+        videoRef.current.muted = true;
         videoRef.current.playsInline = true;
         void videoRef.current.play().catch(() => null);
       }
       if (audioRef.current) {
-        audioRef.current.muted = mobile;
+        // Start unmuted on desktop; mobile unmutes in enableRoomAudio() on speak gesture.
+        if (!mobile) forceFullMediaVolume(audioRef.current);
+        else audioRef.current.muted = true;
         void audioRef.current.play().catch(() => null);
       }
     } catch (e) {
@@ -443,14 +448,20 @@ export const HeyGenLiveAvatar = forwardRef<
   }, [enabled, scheduleSoftReconnect, sessionReady]);
 
   const enableRoomAudio = useCallback(async () => {
+    // Video stays muted (autoplay); LiveKit audio track is on <audio> — boost that.
     if (videoRef.current) {
-      videoRef.current.muted = false;
+      videoRef.current.playsInline = true;
       await videoRef.current.play().catch(() => null);
     }
     if (audioRef.current) {
-      audioRef.current.muted = false;
+      forceFullMediaVolume(audioRef.current);
       await audioRef.current.play().catch(() => null);
     }
+    // Re-assert after a tick — iOS sometimes applies mute after attach.
+    window.setTimeout(() => {
+      forceFullMediaVolume(audioRef.current);
+      void audioRef.current?.play().catch(() => null);
+    }, 50);
   }, []);
 
   const streamPcmToAvatar = useCallback(
@@ -592,7 +603,13 @@ export const HeyGenLiveAvatar = forwardRef<
           status === "live" ? "opacity-100" : "opacity-0"
         }`}
       />
-      <audio ref={audioRef} autoPlay playsInline className="hidden" />
+      <audio
+        ref={audioRef}
+        autoPlay
+        playsInline
+        // Do not leave muted=true stuck; volume forced full on speak.
+        className="hidden"
+      />
       {status === "connecting" && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white/60 text-xs gap-2">
           <Loader2 className="w-4 h-4 animate-spin text-neon-cyan" />
