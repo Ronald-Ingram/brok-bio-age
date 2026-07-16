@@ -431,7 +431,8 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const rearmVoiceInput = useCallback(() => {
     setMessage("");
     messageRef.current = "";
-    // Never scroll the page to the input — iPhone Safari jumps to top on focus().
+    // Never focus or scroll on mobile — iPhone Safari yanks the viewport to top.
+    // Desktop only: soft-focus the empty box.
     const coarse =
       typeof window !== "undefined" &&
       window.matchMedia("(pointer: coarse)").matches;
@@ -441,10 +442,13 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       });
     }
     if (!sttSupported || !preferVoiceInputRef.current) return;
-    // Small delay so TTS / avatar release the audio stack before Web Speech starts.
-    window.setTimeout(() => {
-      if (preferVoiceInputRef.current) startListening();
-    }, 280);
+    // Auto re-arm mic. On touch devices wait a bit longer so TTS fully releases.
+    window.setTimeout(
+      () => {
+        if (preferVoiceInputRef.current) startListening();
+      },
+      coarse ? 600 : 280
+    );
   }, [startListening, sttSupported]);
 
   const handleSend = async () => {
@@ -556,24 +560,31 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     }
   };
 
+  const hasDialogue = Boolean(response || chatTurns.length);
+
   return (
     <div
       className={
         stacked
-          ? "flex flex-col gap-0 sm:gap-1 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-6"
+          ? // Mobile: locked flex shell — only middle pane scrolls (no document bounce).
+            "flex h-full min-h-0 flex-col gap-0 overflow-hidden sm:h-auto sm:min-h-0 sm:overflow-visible sm:gap-1 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-6"
           : "grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]"
       }
     >
       <section
-        className={`rounded-2xl border border-white/10 bg-bg-card space-y-3 ${
-          stacked ? "p-2 pb-1 sm:p-5 sm:space-y-4 rounded-b-none sm:rounded-b-2xl border-b-0 sm:border-b" : "p-5 space-y-4"
+        className={`rounded-2xl border border-white/10 bg-bg-card space-y-2 sm:space-y-3 ${
+          stacked
+            ? "shrink-0 p-2 pb-1 sm:p-5 sm:space-y-4 rounded-b-none sm:rounded-b-2xl border-b-0 sm:border-b"
+            : "p-5 space-y-4"
         }`}
       >
         <div
           className={`relative mx-auto w-full max-w-md rounded-xl overflow-hidden border border-neon-cyan/20 bg-black ${
             stacked
-              ? // Fixed px heights on mobile — vh units jump when iOS chrome shows/hides and yank scroll.
-                "h-[200px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
+              ? // Compact after first reply so conversation + composer fit without page scroll.
+                hasDialogue
+                  ? "h-[112px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
+                  : "h-[160px] sm:h-auto sm:aspect-[3/4] sm:min-h-[360px] sm:max-h-[560px]"
               : "aspect-[3/4] min-h-[420px] max-h-[600px]"
           }`}
         >
@@ -700,103 +711,252 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       </section>
 
       <section
-        className={`rounded-2xl border border-white/10 bg-bg-card space-y-3 flex flex-col ${
+        className={`rounded-2xl border border-white/10 bg-bg-card flex flex-col min-h-0 ${
           stacked
-            ? // Extra bottom pad so fixed mobile composer does not cover tools.
-              "p-2 pt-1 pb-[calc(9.5rem+env(safe-area-inset-bottom,0px))] sm:p-5 sm:pt-4 sm:pb-5 sm:space-y-4 rounded-t-none sm:rounded-t-2xl border-t-0 sm:border-t -mt-px"
+            ? "flex-1 overflow-hidden p-0 sm:p-5 sm:overflow-visible sm:space-y-4 rounded-t-none sm:rounded-t-2xl border-t-0 sm:border-t -mt-px"
             : "p-5 space-y-4"
         }`}
       >
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs uppercase tracking-wider text-white/40">
-            Conversation
-          </span>
-          <button
-            type="button"
-            onClick={() => void startNewConversation()}
-            disabled={!user?.id || loading}
-            className="text-[10px] text-white/40 hover:text-neon-cyan/80 underline disabled:opacity-40"
-          >
-            New conversation
-          </button>
-        </div>
-
-        {/* Latest answer + history (newest on top). Composer is fixed on mobile — no scroll hunt. */}
-        {response && (
-          <div className="rounded-xl border border-neon-cyan/25 bg-neon-cyan/5 p-3 sm:p-4 space-y-2">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="text-[10px] uppercase tracking-wider text-neon-cyan/80">
-                Latest answer
-                {lastModel ? (
-                  <span className="ml-2 normal-case tracking-normal text-white/35">
-                    · {lastModel}
-                  </span>
-                ) : null}
-              </span>
-              <button
-                type="button"
-                className="text-[10px] text-white/40 hover:text-white/70 underline"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(response);
-                }}
-              >
-                Copy full text
-              </button>
-            </div>
-            <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed max-h-[220px] sm:max-h-[min(40vh,360px)] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
-              {response}
-            </p>
-          </div>
-        )}
-
-        {(chatTurns.length > 0 || historyLoading) && (
-          <div className="rounded-xl border border-white/8 bg-black/25 p-3 max-h-[280px] sm:max-h-[min(52vh,520px)] overflow-y-auto space-y-3 min-h-[80px] overscroll-contain [-webkit-overflow-scrolling:touch]">
-            <div className="flex items-center justify-between gap-2 sticky top-0 bg-[#0a0a10]/95 backdrop-blur-sm -mx-1 px-1 py-1 z-10">
-              <span className="text-[10px] uppercase tracking-wider text-white/35">
-                Dialogue
-              </span>
-              <span className="text-[10px] text-white/30">Newest first</span>
-            </div>
-            {historyLoading && chatTurns.length === 0 ? (
-              <p className="text-[11px] text-white/35 flex items-center gap-2">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Loading history…
-              </p>
-            ) : (
-              chatTurns.map((turn) => (
-                <div
-                  key={turn.id}
-                  className={
-                    turn.role === "user"
-                      ? "text-sm text-white/55 pl-2 border-l-2 border-neon-cyan/30"
-                      : "text-sm text-white/80 pl-2 border-l-2 border-white/15"
-                  }
-                >
-                  <span className="text-[10px] uppercase tracking-wider text-white/30 block mb-0.5">
-                    {turn.role === "user" ? "You" : "BROK"}
-                  </span>
-                  <p className="whitespace-pre-wrap leading-relaxed break-words">
-                    {turn.content}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/*
-          Mobile: fixed composer at bottom of viewport so iPhone users never fight
-          page scroll / focus jumps to reach Mic + input + Send.
-          Desktop: normal in-flow block.
-        */}
+        {/* Mobile: ONE scroll region for answers/tools. Composer stays pinned in flex footer. */}
         <div
           className={
             stacked
-              ? "fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-bg-dark/95 backdrop-blur-md px-3 pt-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.45)] sm:static sm:inset-auto sm:z-auto sm:border-0 sm:bg-transparent sm:backdrop-blur-none sm:px-0 sm:pt-0 sm:pb-0 sm:shadow-none"
-              : "block"
+              ? "min-h-0 flex-1 overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] px-2 pt-1 pb-2 space-y-3 sm:overflow-visible sm:px-0 sm:pt-0 sm:pb-0 sm:flex-none sm:min-h-0"
+              : "space-y-3"
           }
         >
-          <div className="mx-auto max-w-5xl space-y-1.5 sm:space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs uppercase tracking-wider text-white/40">
+              Conversation
+            </span>
+            <button
+              type="button"
+              onClick={() => void startNewConversation()}
+              disabled={!user?.id || loading}
+              className="text-[10px] text-white/40 hover:text-neon-cyan/80 underline disabled:opacity-40"
+            >
+              New conversation
+            </button>
+          </div>
+
+          {response && (
+            <div className="rounded-xl border border-neon-cyan/25 bg-neon-cyan/5 p-3 sm:p-4 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[10px] uppercase tracking-wider text-neon-cyan/80">
+                  Latest answer
+                  {lastModel ? (
+                    <span className="ml-2 normal-case tracking-normal text-white/35">
+                      · {lastModel}
+                    </span>
+                  ) : null}
+                </span>
+                <button
+                  type="button"
+                  className="text-[10px] text-white/40 hover:text-white/70 underline"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(response);
+                  }}
+                >
+                  Copy full text
+                </button>
+              </div>
+              {/* No nested scroll on mobile — parent pane scrolls the full answer. */}
+              <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed sm:max-h-[min(40vh,360px)] sm:overflow-y-auto sm:overscroll-contain">
+                {response}
+              </p>
+            </div>
+          )}
+
+          {(chatTurns.length > 0 || historyLoading) && (
+            <div className="rounded-xl border border-white/8 bg-black/25 p-3 space-y-3 min-h-[80px] sm:max-h-[min(52vh,520px)] sm:overflow-y-auto sm:overscroll-contain">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase tracking-wider text-white/35">
+                  Dialogue
+                </span>
+                <span className="text-[10px] text-white/30">Newest first</span>
+              </div>
+              {historyLoading && chatTurns.length === 0 ? (
+                <p className="text-[11px] text-white/35 flex items-center gap-2">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading history…
+                </p>
+              ) : (
+                chatTurns.map((turn) => (
+                  <div
+                    key={turn.id}
+                    className={
+                      turn.role === "user"
+                        ? "text-sm text-white/55 pl-2 border-l-2 border-neon-cyan/30"
+                        : "text-sm text-white/80 pl-2 border-l-2 border-white/15"
+                    }
+                  >
+                    <span className="text-[10px] uppercase tracking-wider text-white/30 block mb-0.5">
+                      {turn.role === "user" ? "You" : "BROK"}
+                    </span>
+                    <p className="whitespace-pre-wrap leading-relaxed break-words">
+                      {turn.content}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {stacked && (
+            <div className="flex flex-wrap gap-2 sm:hidden">
+              <button
+                type="button"
+                onClick={() => setVoiceOn((v) => !v)}
+                disabled={useHeyGenLive}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] border transition-colors ${
+                  voiceOn && !useHeyGenLive
+                    ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
+                    : "border-white/15 text-white/45"
+                } ${useHeyGenLive ? "opacity-50 cursor-not-allowed" : ""}`}
+              >
+                {voiceOn ? <Mic className="w-3 h-3" /> : <MicOff className="w-3 h-3" />}
+                Voice
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvatarOn((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] border transition-colors ${
+                  avatarOn
+                    ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
+                    : "border-white/15 text-white/45"
+                }`}
+              >
+                {avatarOn ? <User className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
+                Avatar
+              </button>
+            </div>
+          )}
+
+          <label className="flex items-center gap-3 rounded-xl border border-dashed border-white/15 px-4 py-3 cursor-pointer hover:border-neon-cyan/30 transition-colors">
+            <FileUp className="w-5 h-5 text-neon-cyan shrink-0" />
+            <span className="text-sm text-white/55 flex-1">
+              {pendingFiles.length
+                ? `${pendingFiles.length} file(s) ready to upload`
+                : `Attach up to ${MAX_ATTACHMENTS} PDF or DOCX files (optional)`}
+            </span>
+            <input
+              type="file"
+              className="hidden"
+              multiple
+              accept=".pdf,.docx,.txt,.csv,.md,.json,.png,.jpg,.jpeg,.webp"
+              onChange={(e) => {
+                if (e.target.files?.length) addPendingFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </label>
+
+          {pendingFiles.length > 0 && (
+            <ul className="space-y-1.5 rounded-xl border border-white/8 bg-black/20 px-3 py-2">
+              {pendingFiles.map((f, i) => (
+                <li
+                  key={`${f.name}-${f.size}`}
+                  className="flex items-center justify-between gap-2 text-xs text-white/60"
+                >
+                  <span className="truncate">{f.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removePendingFile(i)}
+                    className="shrink-0 p-1 rounded hover:bg-white/10 text-white/40"
+                    aria-label={`Remove ${f.name}`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
+            <button
+              type="button"
+              disabled={
+                loading ||
+                iemReportLoading ||
+                (!message.trim() && !pendingFiles.length && !fileContexts.length)
+              }
+              onClick={handleSend}
+              className="hidden sm:inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-50 transition-colors"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
+              {loading ? "Thinking…" : "Send to BROK"}
+            </button>
+            <button
+              type="button"
+              disabled={
+                loading ||
+                iemReportLoading ||
+                !status?.chatReady ||
+                (!message.trim() && !pendingFiles.length && !fileContexts.length)
+              }
+              onClick={handleGenerateIemReport}
+              title="Generate a formatted IEM report (HTML, Markdown, or Print/PDF)"
+              className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white/5 border border-white/15 text-white/80 text-sm font-medium hover:bg-white/10 hover:border-neon-cyan/30 disabled:opacity-50 transition-colors"
+            >
+              {iemReportLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <BarChart3 className="w-4 h-4 text-neon-cyan" />
+              )}
+              {iemReportLoading ? "Building report…" : "IEM Report"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setInneagramOpen(true)}
+              className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-violet-500/10 border border-violet-400/35 text-violet-200 text-sm font-medium hover:bg-violet-500/20 transition-colors sm:min-w-[140px]"
+            >
+              <Sparkles className="w-4 h-4" />
+              Inneagram
+            </button>
+            <button
+              type="button"
+              onClick={() => setCanvasOpen(true)}
+              className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-500/10 border border-emerald-400/35 text-emerald-100 text-sm font-medium hover:bg-emerald-500/20 transition-colors sm:min-w-[140px]"
+            >
+              <LayoutGrid className="w-4 h-4" />
+              Business Canvas
+            </button>
+          </div>
+          <p className="text-[10px] text-white/35">
+            Business Canvas = workshop BMC one-pager (PDF via Print). IEM = deal scorecard.
+            Inneagram = archetype profile. Canvas/IEM/Inneagram: no voice/avatar tokens.
+          </p>
+
+          {(error || ((voiceOn || useHeyGenLive) && response)) && (
+            <div className="rounded-xl border border-white/8 bg-black/25 p-4 space-y-2">
+              {error && <p className="text-sm text-red-400/90">{error}</p>}
+              {(voiceOn || useHeyGenLive) && response && (
+                <p className="text-[10px] text-white/35 flex items-center gap-1">
+                  <Volume2 className="w-3 h-3" />
+                  {voiceLoading
+                    ? speakProgress ?? "Generating speech…"
+                    : useHeyGenLive
+                      ? "Avatar speaks the full answer (same text as above)"
+                      : "Voice speaks the full answer (same text as above)"}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Composer: flex footer on mobile (not position:fixed — fixed fights iOS visual viewport). */}
+        <div
+          className={
+            stacked
+              ? "shrink-0 border-t border-white/10 bg-bg-card/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:border-0 sm:bg-transparent sm:px-0 sm:pt-0 sm:pb-0"
+              : "block space-y-1.5"
+          }
+        >
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <span className="text-xs uppercase tracking-wider text-white/40">
                 Your next message
@@ -806,9 +966,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                   ● Listening — Stop, then Send
                 </span>
               ) : loading || voiceLoading ? (
-                <span className="text-[11px] text-white/45">
-                  BROK responding…
-                </span>
+                <span className="text-[11px] text-white/45">BROK responding…</span>
               ) : (
                 <span className="text-[11px] text-white/50 hidden sm:inline">
                   Tap <strong className="text-white/75">Mic</strong> to dictate
@@ -858,17 +1016,6 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 onChange={(e) => setMessage(e.target.value)}
                 rows={2}
                 enterKeyHint="send"
-                onFocus={(e) => {
-                  // iOS often scrolls the whole page when focusing; keep window put.
-                  const y = window.scrollY;
-                  requestAnimationFrame(() => {
-                    if (Math.abs(window.scrollY - y) > 2) {
-                      window.scrollTo(0, y);
-                    }
-                  });
-                  // Optional: only soft-focus, no scrollIntoView
-                  void e;
-                }}
                 placeholder={
                   listening
                     ? "Listening… speak now"
@@ -876,7 +1023,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                       ? "Waiting for BROK…"
                       : "Type or tap Mic…"
                 }
-                className={`flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-black/40 sm:bg-black/30 border text-sm resize-none sm:resize-y min-h-[52px] sm:min-h-[100px] outline-none ${
+                className={`flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl bg-black/40 sm:bg-black/30 border text-base sm:text-sm resize-none sm:resize-y min-h-[48px] sm:min-h-[100px] outline-none ${
                   listening
                     ? "border-neon-cyan/50 focus:border-neon-cyan/60"
                     : "border-white/10 focus:border-neon-cyan/40"
@@ -904,8 +1051,8 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             <p className="text-[10px] text-white/40 leading-snug hidden sm:block">
               <strong className="text-white/60">Mic</strong> → speak → Send.
               Clears on send; re-arms after BROK finishes if you used mic.{" "}
-              <strong className="text-white/60">Voice / Avatar</strong> = BROK
-              talks back.
+              <strong className="text-white/60">Voice / Avatar</strong> = BROK talks
+              back.
               {!sttSupported && (
                 <span className="text-amber-200/80">
                   {" "}
@@ -915,151 +1062,6 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             </p>
           </div>
         </div>
-
-        {stacked && (
-          <div className="flex flex-wrap gap-2 sm:hidden">
-            <button
-              type="button"
-              onClick={() => setVoiceOn((v) => !v)}
-              disabled={useHeyGenLive}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] border transition-colors ${
-                voiceOn && !useHeyGenLive
-                  ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
-                  : "border-white/15 text-white/45"
-              } ${useHeyGenLive ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              {voiceOn ? <Mic className="w-3 h-3" /> : <MicOff className="w-3 h-3" />}
-              Voice
-            </button>
-            <button
-              type="button"
-              onClick={() => setAvatarOn((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] border transition-colors ${
-                avatarOn
-                  ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
-                  : "border-white/15 text-white/45"
-              }`}
-            >
-              {avatarOn ? <User className="w-3 h-3" /> : <UserX className="w-3 h-3" />}
-              Avatar
-            </button>
-          </div>
-        )}
-
-        <label className="flex items-center gap-3 rounded-xl border border-dashed border-white/15 px-4 py-3 cursor-pointer hover:border-neon-cyan/30 transition-colors">
-          <FileUp className="w-5 h-5 text-neon-cyan shrink-0" />
-          <span className="text-sm text-white/55 flex-1">
-            {pendingFiles.length
-              ? `${pendingFiles.length} file(s) ready to upload`
-              : `Attach up to ${MAX_ATTACHMENTS} PDF or DOCX files (optional)`}
-          </span>
-          <input
-            type="file"
-            className="hidden"
-            multiple
-            accept=".pdf,.docx,.txt,.csv,.md,.json,.png,.jpg,.jpeg,.webp"
-            onChange={(e) => {
-              if (e.target.files?.length) addPendingFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
-        </label>
-
-        {pendingFiles.length > 0 && (
-          <ul className="space-y-1.5 rounded-xl border border-white/8 bg-black/20 px-3 py-2">
-            {pendingFiles.map((f, i) => (
-              <li
-                key={`${f.name}-${f.size}`}
-                className="flex items-center justify-between gap-2 text-xs text-white/60"
-              >
-                <span className="truncate">{f.name}</span>
-                <button
-                  type="button"
-                  onClick={() => removePendingFile(i)}
-                  className="shrink-0 p-1 rounded hover:bg-white/10 text-white/40"
-                  aria-label={`Remove ${f.name}`}
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
-          <button
-            type="button"
-            disabled={
-              loading ||
-              iemReportLoading ||
-              (!message.trim() && !pendingFiles.length && !fileContexts.length)
-            }
-            onClick={handleSend}
-            className="hidden sm:inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-50 transition-colors"
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-            {loading ? "Thinking…" : "Send to BROK"}
-          </button>
-          <button
-            type="button"
-            disabled={
-              loading ||
-              iemReportLoading ||
-              !status?.chatReady ||
-              (!message.trim() && !pendingFiles.length && !fileContexts.length)
-            }
-            onClick={handleGenerateIemReport}
-            title="Generate a formatted IEM report (HTML, Markdown, or Print/PDF)"
-            className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-white/5 border border-white/15 text-white/80 text-sm font-medium hover:bg-white/10 hover:border-neon-cyan/30 disabled:opacity-50 transition-colors"
-          >
-            {iemReportLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <BarChart3 className="w-4 h-4 text-neon-cyan" />
-            )}
-            {iemReportLoading ? "Building report…" : "IEM Report"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setInneagramOpen(true)}
-            className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-violet-500/10 border border-violet-400/35 text-violet-200 text-sm font-medium hover:bg-violet-500/20 transition-colors sm:min-w-[140px]"
-          >
-            <Sparkles className="w-4 h-4" />
-            Inneagram
-          </button>
-          <button
-            type="button"
-            onClick={() => setCanvasOpen(true)}
-            className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-500/10 border border-emerald-400/35 text-emerald-100 text-sm font-medium hover:bg-emerald-500/20 transition-colors sm:min-w-[140px]"
-          >
-            <LayoutGrid className="w-4 h-4" />
-            Business Canvas
-          </button>
-        </div>
-        <p className="text-[10px] text-white/35">
-          Business Canvas = workshop BMC one-pager (PDF via Print). IEM = deal scorecard.
-          Inneagram = archetype profile. Canvas/IEM/Inneagram: no voice/avatar tokens.
-        </p>
-
-        {(error || ((voiceOn || useHeyGenLive) && response)) && (
-          <div className="rounded-xl border border-white/8 bg-black/25 p-4 space-y-2">
-            {error && <p className="text-sm text-red-400/90">{error}</p>}
-            {(voiceOn || useHeyGenLive) && response && (
-              <p className="text-[10px] text-white/35 flex items-center gap-1">
-                <Volume2 className="w-3 h-3" />
-                {voiceLoading
-                  ? speakProgress ?? "Generating speech…"
-                  : useHeyGenLive
-                    ? "Avatar speaks the full answer (same text as above)"
-                    : "Voice speaks the full answer (same text as above)"}
-              </p>
-            )}
-          </div>
-        )}
 
         <audio ref={audioRef} className="hidden" />
       </section>
