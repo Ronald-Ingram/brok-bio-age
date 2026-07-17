@@ -181,11 +181,16 @@ export function WalletPanel({
     const n = parseInt(amount, 10);
     try {
       if (panel === "send") {
+        if (!recipient.trim() || recipient.trim().length < 2) {
+          setGiftError("Enter the recipient's name.");
+          setSubmitting(false);
+          return;
+        }
         const result = await sendPockInvite({
           amount: n,
-          phone: phone.trim(),
-          recipientBrokId: recipient.trim() || undefined,
-          recipientWallet: recipientWallet.trim() || undefined,
+          recipientName: recipient.trim(),
+          phone: phone.trim() || undefined,
+          recipientBrokId: giftRecipientId.trim() || undefined,
         });
         setInviteResult(result);
         setConfirming(false);
@@ -352,21 +357,32 @@ export function WalletPanel({
         >
           {panel === "send" && (
             <>
-              <h3 className="text-sm font-medium text-white/70">
-                Send to User
-              </h3>
+              <h3 className="text-sm font-medium text-white/70">Send $POCK</h3>
               <p className="text-xs text-white/40 leading-relaxed">
-                Recipient gets an SMS-friendly claim link. They can claim with
-                their BROK user ID (if registered), a wallet address, or the
-                8-character password generated for this transfer.
+                Same simple flow as Gift: enter a name, create a private link.
+                If they already have BROK and open the link while signed in, the
+                $POCK is added to their existing Genius Wallet. Optional BROK
+                account ID credits them instantly (no link needed).
               </p>
               <label className="block space-y-1.5">
                 <span className="text-xs text-white/45 uppercase tracking-wide">
-                  Mobile phone (required)
+                  Recipient name (required)
+                </span>
+                <input
+                  type="text"
+                  placeholder="Friend or family name"
+                  value={recipient}
+                  onChange={(e) => setRecipient(e.target.value)}
+                  className="bio-field__control w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-white/45 uppercase tracking-wide">
+                  Mobile phone (optional — pre-fills Text message)
                 </span>
                 <input
                   type="tel"
-                  placeholder="+1 555 123 4567"
+                  placeholder="Optional"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="bio-field__control w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none"
@@ -374,58 +390,44 @@ export function WalletPanel({
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs text-white/45 uppercase tracking-wide">
-                  BROK user ID (optional — instant if known)
+                  BROK account ID (optional — instant credit if known)
                 </span>
                 <input
                   type="text"
-                  placeholder="Recipient UUID (optional)"
-                  value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none font-mono text-xs"
-                />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-xs text-white/45 uppercase tracking-wide">
-                  Recipient wallet (optional)
-                </span>
-                <input
-                  type="text"
-                  placeholder="0x… or wallet address"
-                  value={recipientWallet}
-                  onChange={(e) => setRecipientWallet(e.target.value)}
+                  placeholder="Their BROK-… code / account UUID"
+                  value={giftRecipientId}
+                  onChange={(e) => setGiftRecipientId(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none font-mono text-xs"
                 />
               </label>
               {inviteResult && (
                 <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/5 p-3 space-y-2 text-xs text-white/70">
                   <p className="font-medium text-emerald-400/90">
-                    {inviteResult.smsSent
-                      ? "Invite sent via SMS"
-                      : "Invite ready — share via SMS"}
+                    {(inviteResult as { instantCredit?: boolean }).instantCredit
+                      ? "Credited to their existing account"
+                      : inviteResult.smsSent
+                        ? "Send ready — SMS sent"
+                        : "Send ready — share the link"}
                   </p>
                   {inviteResult.smsError && (
                     <p className="text-amber-400/90">
-                      SMS failed ({inviteResult.smsError}) — copy the text below
-                      manually.
+                      SMS failed ({inviteResult.smsError}) — copy the link below.
                     </p>
                   )}
                   <p>
                     <span className="text-white/45">Claim link:</span>{" "}
                     <a
-                      href={inviteResult.claimUrl}
+                      href={
+                        inviteResult.giftUrl ??
+                        inviteResult.claimUrl
+                      }
                       className="text-neon-cyan break-all hover:underline"
                     >
-                      {inviteResult.claimUrl}
+                      {inviteResult.giftUrl ?? inviteResult.claimUrl}
                     </a>
                   </p>
-                  <p>
-                    <span className="text-white/45">8-digit password:</span>{" "}
-                    <span className="font-mono text-neon-cyan">
-                      {inviteResult.claimPassword}
-                    </span>
-                  </p>
                   <p className="text-white/45 whitespace-pre-wrap">
-                    {inviteResult.smsHint}
+                    {inviteResult.shareMessage ?? inviteResult.smsHint}
                   </p>
                 </div>
               )}

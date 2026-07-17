@@ -230,6 +230,8 @@ export interface PockInviteResult {
   smsSent?: boolean;
   smsError?: string | null;
   smsManual?: boolean;
+  /** True when recipient BROK id was credited immediately */
+  instantCredit?: boolean;
 }
 
 async function postPockInvite(body: Record<string, unknown>): Promise<PockInviteResult> {
@@ -257,14 +259,20 @@ async function postPockInvite(body: Record<string, unknown>): Promise<PockInvite
 
 export async function createPockInvite(options: {
   amount: number;
-  phone: string;
+  /** Optional — for Text pre-fill only */
+  phone?: string;
+  recipientName?: string;
   recipientBrokId?: string;
   recipientWallet?: string;
 }): Promise<PockInviteResult> {
+  if (!options.recipientName?.trim() && !options.recipientBrokId?.trim()) {
+    throw new Error("recipient_name_required");
+  }
   return postPockInvite({
     inviteKind: "transfer",
     amount: options.amount,
-    phone: options.phone,
+    phone: options.phone?.trim() || undefined,
+    recipientName: options.recipientName?.trim() || undefined,
     recipientBrokId: options.recipientBrokId,
     recipientWallet: options.recipientWallet,
   });

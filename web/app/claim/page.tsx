@@ -44,7 +44,8 @@ function ClaimContent() {
         return (await res.json()) as InviteInfo;
       })
       .then((data) => {
-        if (data?.kind === "gift") {
+        // Gift and Send both use one Genius Wallet claim path (auto-credits logged-in users).
+        if (data?.kind === "gift" || data?.kind === "transfer") {
           router.replace(`/genius-wallet?claim=${encodeURIComponent(token)}`);
           return;
         }

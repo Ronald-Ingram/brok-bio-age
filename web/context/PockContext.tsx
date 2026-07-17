@@ -60,7 +60,8 @@ interface PockContextValue {
   sendPock: (recipientId: string, amount: number) => Promise<void>;
   sendPockInvite: (options: {
     amount: number;
-    phone: string;
+    phone?: string;
+    recipientName?: string;
     recipientBrokId?: string;
     recipientWallet?: string;
   }) => Promise<import("@/lib/pockService").PockInviteResult>;
@@ -385,14 +386,23 @@ export function PockProvider({ children }: { children: ReactNode }) {
   const sendPockInvite = useCallback(
     async (options: {
       amount: number;
-      phone: string;
+      phone?: string;
+      recipientName?: string;
       recipientBrokId?: string;
       recipientWallet?: string;
     }) => {
       try {
         const result = await createPockInvite(options);
         await refresh();
-        showToast(`✓ Invite created · ${result.amount} $POCK reserved`, "success");
+        const who = options.recipientName || "recipient";
+        showToast(
+          `✓ Sent · ${result.amount} $POCK for ${who}${
+            result.instantCredit
+              ? " (credited to their account)"
+              : " (share the link)"
+          }`,
+          "success"
+        );
         return result;
       } catch (e) {
         handleActionError(e, showToast);

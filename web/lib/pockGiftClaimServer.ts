@@ -32,22 +32,38 @@ export function verifyGiftInvite(token: string): PockInvitePayload | null {
   return payload;
 }
 
-function giftCreditMessage(payload: PockInvitePayload, credited: boolean): string {
+/** Gift or transfer — both can credit a logged-in Genius Wallet. */
+export function verifyClaimableInvite(token: string): PockInvitePayload | null {
+  const payload = verifyInvite(token);
+  if (!payload) return null;
+  if (payload.kind !== "gift" && payload.kind !== "transfer") return null;
+  return payload;
+}
+
+function inviteCreditMessage(
+  payload: PockInvitePayload,
+  credited: boolean
+): string {
   const usdSuffix =
     payload.usdEquivalent != null
       ? ` (~$${payload.usdEquivalent.toFixed(2)} USD)`
       : "";
+  const label = payload.kind === "gift" ? "gift" : "transfer";
   return credited
-    ? `🎁 ${payload.amount} $POCK gift${usdSuffix} credited to your Genius Wallet.`
-    : `🎁 ${payload.amount} $POCK gift${usdSuffix} is already in your wallet.`;
+    ? `✓ ${payload.amount} $POCK ${label}${usdSuffix} added to your Genius Wallet.`
+    : `✓ ${payload.amount} $POCK ${label}${usdSuffix} is already in your wallet.`;
 }
 
+/**
+ * Credit invite $POCK to an existing logged-in account (idempotent).
+ * Works for gifts and sends — simplest path for registered recipients.
+ */
 export async function claimGiftForUser(
   supabase: SupabaseClient,
   userId: string,
   token: string
 ): Promise<GiftClaimResult> {
-  const payload = verifyGiftInvite(token);
+  const payload = verifyClaimableInvite(token);
   if (!payload) {
     throw new GiftClaimError("invite_expired_or_invalid", 400);
   }
@@ -70,15 +86,15 @@ export async function claimGiftForUser(
         ok: true,
         amount: payload.amount,
         alreadyClaimed: true,
-        message: giftCreditMessage(payload, false),
+        message: inviteCreditMessage(payload, false),
       };
     }
     throw new GiftClaimError("gift_already_claimed", 409);
   }
 
   const creditNote = payload.recipientName
-    ? `Gift for ${payload.recipientName} · reserved in Genius Wallet`
-    : "Gift $POCK received · reserved in Genius Wallet";
+    ? `${payload.kind === "gift" ? "Gift" : "Send"} for ${payload.recipientName} · reserved in Genius Wallet`
+    : `${payload.kind === "gift" ? "Gift" : "Transfer"} $POCK received · reserved in Genius Wallet`;
 
   try {
     await creditPockFromStripe(supabase, {
@@ -96,6 +112,6 @@ export async function claimGiftForUser(
     ok: true,
     amount: payload.amount,
     alreadyClaimed: false,
-    message: giftCreditMessage(payload, true),
+    message: inviteCreditMessage(payload, true),
   };
 }

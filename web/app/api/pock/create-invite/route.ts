@@ -11,11 +11,11 @@ import {
   signInvite,
 } from "@/lib/pockInvite";
 import { balanceUsdValue, fetchPockMarketQuote } from "@/lib/pockPrice";
+import { claimGiftForUser } from "@/lib/pockGiftClaimServer";
 import { absoluteUrl } from "@/lib/siteConfig";
-import { siteOrigin } from "@/lib/stripeServer";
 import { isTwilioConfigured, sendSms } from "@/lib/twilioSms";
 import { NextResponse } from "next/server";
-import { getUserSupabase } from "@/lib/supabase/server";
+import { getServiceSupabase, getUserSupabase } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -52,11 +52,20 @@ export async function POST(req: Request) {
     const email = emailRaw;
 
     const inviteKindEarly = body.inviteKind === "gift" ? "gift" : "transfer";
+    const nameEarly = body.recipientName?.trim() ?? "";
+    const brokIdEarly = body.recipientBrokId?.trim() ?? "";
 
+    // Gift / Send: name (or known BROK id) is enough — phone optional (same as gift).
+    // Phone/email only required for legacy transfer with no name and no BROK id.
     if (!phone && !email && inviteKindEarly !== "gift") {
-      return NextResponse.json({ error: "contact_required" }, { status: 400 });
+      if (nameEarly.length < 2 && !brokIdEarly) {
+        return NextResponse.json(
+          { error: "recipient_name_required" },
+          { status: 400 }
+        );
+      }
     }
-    if (phone && phone.length < 10 && !email && inviteKindEarly !== "gift") {
+    if (phone && phone.length < 10 && !email && inviteKindEarly !== "gift" && nameEarly.length < 2 && !brokIdEarly) {
       return NextResponse.json({ error: "phone_required" }, { status: 400 });
     }
     if (email && !isValidEmail(email) && !phone) {
@@ -96,7 +105,15 @@ export async function POST(req: Request) {
       (senderRow?.display_name as string | null)?.trim() ||
       DEFAULT_SENDER_NAME;
 
+    // Name required for gift; for send (transfer) name required unless BROK id is known.
     if (inviteKind === "gift" && (!recipientName || recipientName.length < 2)) {
+      return NextResponse.json({ error: "recipient_name_required" }, { status: 400 });
+    }
+    if (
+      inviteKind === "transfer" &&
+      !recipientBrokId &&
+      (!recipientName || recipientName.length < 2)
+    ) {
       return NextResponse.json({ error: "recipient_name_required" }, { status: 400 });
     }
 
@@ -109,6 +126,9 @@ export async function POST(req: Request) {
       if (!recipient) {
         return NextResponse.json({ error: "recipient_not_found" }, { status: 404 });
       }
+      if (recipientBrokId === senderId) {
+        return NextResponse.json({ error: "cannot_send_to_self" }, { status: 400 });
+      }
     }
 
     const claimPassword = generateClaimPassword(8);
@@ -120,10 +140,10 @@ export async function POST(req: Request) {
       email: email || undefined,
       claimPassword,
       exp: inviteExpiresAt(72),
-      recipientName: inviteKind === "gift" ? recipientName : undefined,
+      recipientName: recipientName || undefined,
       usdEquivalent: inviteKind === "gift" ? giftUsdEquivalent : undefined,
-      personalMessage: inviteKind === "gift" ? personalMessage : undefined,
-      senderName: inviteKind === "gift" ? senderName : undefined,
+      personalMessage: personalMessage || undefined,
+      senderName: senderName || undefined,
     });
 
     const contactTail = email
@@ -137,8 +157,8 @@ export async function POST(req: Request) {
       inviteKind === "gift"
         ? `Gift to ${recipientName} · ${giftContact}`
         : recipientBrokId
-          ? `Invite to ${recipientBrokId.slice(0, 8)}… · ${phone ? `SMS …${contactTail}` : email}`
-          : `Invite · ${phone ? `SMS …${contactTail}` : email}`;
+          ? `Send to account ${recipientBrokId.slice(0, 8)}… · ${recipientName ?? "member"}`
+          : `Send to ${recipientName ?? "recipient"} · ${giftContact}`;
 
     const { error: debitErr } = await userClient.rpc("spend_pock", {
       p_amount: amount,
@@ -153,35 +173,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: debitErr.message }, { status: 500 });
     }
 
-    const origin = siteOrigin(req);
+    // Instant credit when sender knows the recipient's BROK account id.
+    let instantCredit = false;
+    if (recipientBrokId) {
+      try {
+        await claimGiftForUser(getServiceSupabase(), recipientBrokId, token);
+        instantCredit = true;
+      } catch (e) {
+        console.error("instant transfer credit failed:", e);
+        // Link still works for claim fallback
+      }
+    }
+
+    // One claim path for gift + send: open while logged in → credits existing wallet.
     const giftUrl = giftClaimRegisterUrl(token);
-    const claimUrl =
-      inviteKind === "gift"
-        ? giftUrl
-        : `${origin}/claim?token=${encodeURIComponent(token)}`;
-    const registerUrl = inviteKind === "gift" ? giftUrl : null;
+    const claimUrl = giftUrl;
+    const registerUrl = giftUrl;
 
-    const giftShareInput =
-      inviteKind === "gift" && recipientName
-        ? {
-            recipientName,
-            amount,
-            usdEquivalent: giftUsdEquivalent ?? null,
-            quoteSource: giftQuoteSource ?? null,
-            giftUrl,
-            senderName,
-            personalMessage,
-          }
-        : null;
+    const displayName = recipientName || "friend";
+    const giftShareInput = {
+      recipientName: displayName,
+      amount,
+      usdEquivalent: giftUsdEquivalent ?? null,
+      quoteSource: giftQuoteSource ?? null,
+      giftUrl,
+      senderName,
+      personalMessage,
+    };
 
-    const shareMessage = giftShareInput
-      ? formatGiftShareMessage(giftShareInput)
-      : `You received ${amount} $POCK from BROK. Claim: ${claimUrl} Password: ${claimPassword}`;
-
-    const smsBody = giftShareInput
-      ? formatGiftSmsMessage(giftShareInput)
-      : shareMessage;
-
+    const shareMessage = formatGiftShareMessage(giftShareInput);
+    const smsBody = formatGiftSmsMessage(giftShareInput);
     const smsHint = shareMessage;
 
     let smsSent = false;
@@ -197,8 +218,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       claimUrl,
-      giftUrl: inviteKind === "gift" ? giftUrl : null,
-      claimPassword: inviteKind === "gift" ? null : claimPassword,
+      giftUrl,
+      claimPassword: null,
       amount,
       phone: phone || null,
       email: email || null,
@@ -211,6 +232,7 @@ export async function POST(req: Request) {
       usdPerPockQuote: inviteKind === "gift" ? (giftUsdPerPock ?? null) : null,
       quoteSource: inviteKind === "gift" ? (giftQuoteSource ?? null) : null,
       registerUrl,
+      instantCredit,
       smsHint,
       shareMessage,
       personalMessage: personalMessage ?? null,
