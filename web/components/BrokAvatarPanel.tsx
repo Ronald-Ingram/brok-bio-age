@@ -23,11 +23,12 @@ import {
   BarChart3,
   FileUp,
   LayoutGrid,
-  Sparkles,
   Loader2,
   Mic,
   MicOff,
+  RotateCcw,
   Send,
+  Sparkles,
   User,
   UserX,
   Volume2,
@@ -123,6 +124,9 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [inneagramOpen, setInneagramOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
   const [threadList, setThreadList] = useState<
     { id: string; title: string | null; updated_at: string }[]
   >([]);
@@ -230,34 +234,78 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     void loadThreadHistory();
   }, [loadThreadHistory]);
 
-  const startNewConversation = async () => {
-    if (!user?.id) return;
+  /** Clear on-screen chat only — wallet, name, Inneagram, personal facts stay. */
+  const clearConversationUi = useCallback(() => {
+    stopListening();
+    preferVoiceInputRef.current = false;
+    setChatTurns([]);
+    setResponse("");
+    setMessage("");
+    messageRef.current = "";
+    setPendingFiles([]);
+    setFileContexts([]);
+    setFileIds([]);
     setError(null);
+    setLastUserMessage("");
+    setLastModel(null);
+    setSpeakProgress(null);
+    setIemReport(null);
     setHistoryOpen(false);
+    // Stop any in-progress TTS playback
     try {
-      const res = await fetch("/api/brok/threads", {
-        method: "POST",
-        headers: await brokAuthHeaders(),
-        body: JSON.stringify({
-          user_id: user.id,
-          page_pathname: pathname ?? "/",
-        }),
-      });
-      const data = (await res.json()) as { thread_id?: string; error?: string };
-      if (!res.ok || !data.thread_id) {
-        throw new Error(data.error ?? "new_thread_failed");
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute("src");
+        audioRef.current.load();
       }
-      setThreadId(data.thread_id);
-      writeStoredThreadId(user.id, data.thread_id);
-      setChatTurns([]);
-      setResponse("");
-      setMessage("");
-      setPendingFiles([]);
-      setFileContexts([]);
-      setFileIds([]);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not start new conversation");
+    } catch {
+      /* ignore */
     }
+  }, [stopListening]);
+
+  const resetConversation = async () => {
+    setError(null);
+    setResetting(true);
+    setResetConfirmOpen(false);
+    try {
+      clearConversationUi();
+
+      if (user?.id) {
+        const res = await fetch("/api/brok/threads", {
+          method: "POST",
+          headers: await brokAuthHeaders(),
+          body: JSON.stringify({
+            user_id: user.id,
+            page_pathname: pathname ?? "/",
+          }),
+        });
+        const data = (await res.json()) as { thread_id?: string; error?: string };
+        if (!res.ok || !data.thread_id) {
+          throw new Error(data.error ?? "reset_failed");
+        }
+        setThreadId(data.thread_id);
+        writeStoredThreadId(user.id, data.thread_id);
+      } else {
+        setThreadId(null);
+      }
+
+      setResetNotice(
+        "Conversation cleared. Your name, Inneagram, and saved facts stay with your account."
+      );
+      window.setTimeout(() => setResetNotice(null), 5000);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Could not reset conversation — try again."
+      );
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const requestResetConversation = () => {
+    if (loading || voiceLoading || resetting) return;
+    // Empty already — still allow new thread so model history is clean
+    setResetConfirmOpen(true);
   };
 
   const loadThreadList = async () => {
@@ -928,25 +976,77 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           <span className="text-xs uppercase tracking-wider text-white/40">
             Conversation
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <button
               type="button"
               onClick={() => void openHistory()}
-              disabled={!user?.id || loading}
+              disabled={!user?.id || loading || resetting}
               className="text-[11px] px-2.5 py-1 rounded-lg border border-white/15 text-white/60 hover:border-neon-cyan/40 hover:text-neon-cyan disabled:opacity-40"
             >
               History
             </button>
             <button
               type="button"
-              onClick={() => void startNewConversation()}
-              disabled={!user?.id || loading}
-              className="text-[11px] px-2.5 py-1 rounded-lg border border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan font-medium hover:bg-neon-cyan/20 disabled:opacity-40"
+              onClick={requestResetConversation}
+              disabled={loading || voiceLoading || resetting}
+              title="Clear this chat and start clean — keeps your name, Inneagram, and saved facts"
+              className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-lg border border-amber-400/35 bg-amber-400/10 text-amber-100/90 font-medium hover:bg-amber-400/15 disabled:opacity-40"
             >
-              New chat
+              {resetting ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <RotateCcw className="w-3 h-3" />
+              )}
+              Reset conversation
             </button>
           </div>
         </div>
+
+        {resetConfirmOpen && (
+          <div
+            className="order-1 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-3 space-y-2"
+            role="dialog"
+            aria-labelledby="reset-conv-title"
+          >
+            <p id="reset-conv-title" className="text-sm font-medium text-white/90">
+              Start a clean conversation?
+            </p>
+            <p className="text-xs text-white/55 leading-relaxed">
+              Clears messages, the answer pane, and the input box so you can change
+              topics with less scroll. Your name, Inneagram type, and saved personal
+              facts stay with your account. Past chats remain under History.
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => void resetConversation()}
+                disabled={resetting}
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-amber-400/40 bg-amber-400/15 text-amber-50 font-medium hover:bg-amber-400/25 disabled:opacity-40"
+              >
+                {resetting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="w-3.5 h-3.5" />
+                )}
+                Clear conversation
+              </button>
+              <button
+                type="button"
+                onClick={() => setResetConfirmOpen(false)}
+                disabled={resetting}
+                className="text-xs px-3 py-1.5 rounded-lg border border-white/15 text-white/60 hover:border-white/25 disabled:opacity-40"
+              >
+                Keep chatting
+              </button>
+            </div>
+          </div>
+        )}
+
+        {resetNotice && (
+          <p className="order-1 text-xs text-emerald-300/90 border border-emerald-400/20 rounded-lg px-3 py-2 bg-emerald-400/5">
+            {resetNotice}
+          </p>
+        )}
 
         {historyOpen && (
           <div className="order-1 rounded-xl border border-white/10 bg-black/40 p-3 space-y-2 max-h-48 overflow-y-auto">
