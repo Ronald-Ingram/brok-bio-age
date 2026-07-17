@@ -8,6 +8,11 @@ import {
   formatUserFactsForPrompt,
   loadUserFacts,
 } from "./brokUserFacts";
+import {
+  KIRON_CANON_FIVE_CORE_VALUES,
+  KIRON_CANON_FOUNDER_VALUES,
+  KIRON_CANON_FOUNDER_VALUES_TAGS,
+} from "./kironCanonFounderValues";
 import { getServiceSupabase } from "./supabase/server";
 
 /**
@@ -357,5 +362,57 @@ export async function seedFaqToCanon(): Promise<{ inserted: number; skipped: num
     else skipped += 1;
   }
 
+  // Always refresh founder ethics/values Canon (highest tier)
+  const founderSeed = await seedFounderValuesToCanon();
+  inserted += founderSeed.inserted;
+  skipped += founderSeed.updated;
+
   return { inserted, skipped };
+}
+/** Upsert founder ethics / values / history Canon into core_knowledge. */
+export async function seedFounderValuesToCanon(): Promise<{
+  inserted: number;
+  updated: number;
+}> {
+  const supabase = getServiceSupabase();
+  const docs = [
+    {
+      tags: KIRON_CANON_FOUNDER_VALUES_TAGS,
+      content: KIRON_CANON_FOUNDER_VALUES,
+    },
+    {
+      tags:
+        "Kiron Canon|tier:highest|truth|values|privacy|security|sovereignty|innovation|community|ingram",
+      content: KIRON_CANON_FIVE_CORE_VALUES,
+    },
+  ];
+
+  let inserted = 0;
+  let updated = 0;
+  for (const doc of docs) {
+    const { data: existing } = await supabase
+      .from("core_knowledge")
+      .select("tags")
+      .eq("tags", doc.tags)
+      .maybeSingle();
+    if (existing) {
+      await supabase
+        .from("core_knowledge")
+        .update({ content: doc.content })
+        .eq("tags", doc.tags);
+      updated += 1;
+    } else {
+      const { error } = await supabase.from("core_knowledge").insert(doc);
+      if (!error) inserted += 1;
+    }
+  }
+  return { inserted, updated };
+}
+
+/**
+ * Always-available founder Canon for ethics/values/history questions
+ * (works even before DB seed; also lives in core_knowledge after seed).
+ */
+export function getFounderValuesCanonBlock(): string {
+  return KIRON_CANON_FOUNDER_VALUES + "\n\n" + KIRON_CANON_FIVE_CORE_VALUES;
 }

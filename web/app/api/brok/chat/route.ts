@@ -13,7 +13,10 @@ import {
   chatWithFailover,
 } from "@/lib/brokChatFailover";
 import { GroqChatError, resolveGroqMaxTokens } from "@/lib/brokChatGroq";
-import { buildKnowledgeContext } from "@/lib/brokKnowledge";
+import {
+  buildKnowledgeContext,
+  getFounderValuesCanonBlock,
+} from "@/lib/brokKnowledge";
 import {
   formatPageContextForPrompt,
   needsPageContext,
@@ -177,10 +180,14 @@ export async function POST(req: Request) {
     if (prices) parts.push(prices);
 
     if (founderIdentity) {
-      // Canon/ethics primary for values/history questions
+      // Highest-tier founder ethics/values/history Canon (static + DB)
+      parts.push(
+        "KIRON CANON — FOUNDER ETHICS / VALUES / HISTORY (primary truth — prefer this voice and structure):\n" +
+          getFounderValuesCanonBlock()
+      );
       if (knowledgeBlock?.trim()) {
         parts.push(
-          "KIRON CANON / FAQ / MEMORY (primary for ethics, integrity, product design, values):\n" +
+          "KIRON CANON / FAQ / MEMORY (supporting product mechanics):\n" +
             knowledgeBlock
         );
       }

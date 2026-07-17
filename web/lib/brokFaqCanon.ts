@@ -183,6 +183,33 @@ export const BROK_FAQ_ITEMS: BrokFaqItem[] = [
       "On /chat or /avatar, tap Business Canvas. Answer ~15 short workshop questions (customer, problem, value, channels, revenue, costs, partners, metrics). When finished, Download HTML or Print → Save as PDF (landscape, backgrounds on). No voice/avatar $POCK burn for the canvas itself. Great for StartUpNV / Nevada founder workshop demos.",
     tags: ["canvas", "bmc", "business", "workshop", "pdf", "startupnv"],
   },
+  {
+    id: "faq_core_values",
+    question: "What are BROK / Ronald Ingram core values?",
+    answer:
+      "Every company Ronald Ingram founded is built on five core values: (1) Privacy, (2) Security, (3) Self-Sovereignty — free thought, speech, market, choice, right to try, pursuit of life, liberty, and happiness, (4) Innovation — be the solution and the change you want to see, (5) Community — think global, act local; be curious, bold, authentic; hand-up not hand-out. Foundation: raw self-sovereignty. BROK is your sovereign agentic banker; $POCK is prepaid utility fuel, not a bank deposit. Not financial advice. DYOR.",
+    tags: [
+      "values",
+      "ethics",
+      "integrity",
+      "sovereignty",
+      "privacy",
+      "security",
+      "innovation",
+      "community",
+      "ingram",
+      "founder",
+      "brok",
+      "pock",
+    ],
+  },
+  {
+    id: "faq_what_is_account",
+    question: "What is a Genius Wallet account — is it a bank account?",
+    answer:
+      "A Genius Wallet account is prepaid $POCK service credit on Neobanx for BROK tools and peer $POCKING — not a bank account, not FDIC-insured, not a deposit. Your shareable handle looks like BROK- plus 8 characters (e.g. BROK-A1B2C3D4). A Device PIN is 4–8 digits, one PIN per account across devices, used for Switch account — not your Apple password. Hybrid custody: reserved ledger for convenience; optional on-chain self-custody when you choose. Seed phrases stay with you.",
+    tags: ["account", "wallet", "bank", "pock", "pin", "custody", "trust"],
+  },
 ];
 
 export function formatFaqForCanon(item: BrokFaqItem): string {
