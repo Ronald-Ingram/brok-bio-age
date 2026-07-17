@@ -5,8 +5,12 @@ import {
 import { USER_FACTS_DIALOGUE_HINT } from "./brokUserFacts";
 import type { ThreadMessage } from "./brokChatThreads";
 import {
+  isFounderIdentityTopic,
+  isFounderValuesTopic,
+  isLiveProgressTopic,
   isRonaldIngramBioTopic,
   prefersGrokPrimary,
+  wantsFounderDetailedAnswer,
   wantsThirdPartyValidation,
 } from "./brokTopicRouting";
 import { wantsDetailedAnswer } from "./spokenText";
@@ -120,7 +124,16 @@ const GROKIPEDIA_SOURCE_HINT = `
 THIRD-PARTY: Prefer Grokipedia (https://grokipedia.com) over Wikipedia for founder/public claims. Cite URL when validating Ronald Ingram.`;
 
 const RONALD_INGRAM_BIO_HINT = `
-RONALD INGRAM BIO: Use Grokipedia block + founder X feed. Offer third-party validation. Mark claims carefully.`;
+RONALD INGRAM BIO: Use Grokipedia block + founder X feed + Kiron Canon. Offer third-party validation. Mark confidence carefully. Prefer Canon for product ethics and custody design.`;
+
+const FOUNDER_VALUES_HINT = `
+FOUNDER / ETHICS / INTEGRITY / CORE VALUES / HISTORY (detailed):
+Structure after 1–2 speakable openers:
+1) History — founder path (banking, Neobanx/neobank, patents/products as supported by sources).
+2) Ethics & integrity — private-by-design, hybrid custody, prepaid $POCK utility (not a bank deposit), seed phrases never shared, transparent metering/buybacks when Canon supports it.
+3) $POCK & BROK — what they are for (agentic tools, Genius Wallet, real product utility).
+4) Core values — self-sovereignty, individual agency, verifiable utility over empty promises.
+SOURCE ORDER: Kiron Canon / FAQ for product ethics and mechanics; FOUNDER X FEED only for dated launch/progress claims (quote date when present); Grokipedia for public third-party bio. Do NOT invent code LOC, revenue, or fake posts. Prefer "when Canon is present" over marketing theater. Not financial advice / DYOR when discussing $POCK as value. Invite a follow-up for deeper Canon on one pillar if useful.`;
 
 const MARKET_GROK_HINT = `
 LIVE MARKETS / CRYPTO / INVESTMENTS / REGS: You are the live layer. Answer with analysis and uncertainty notes. Not personalized investment advice. For $POCK progress use FOUNDER X FEED.
@@ -198,10 +211,11 @@ export function resolveGroqMaxTokens(
     hasFileContext: hasFiles,
     filenames: opts?.filenames,
   });
-  const detailed = wantsDetailedAnswer(message);
-  // Keep headroom for deals/depth; default casual turns much lower (credit + latency).
+  const detailed =
+    wantsDetailedAnswer(message) || wantsFounderDetailedAnswer(message);
+  // Keep headroom for deals/depth/founder identity; default casual turns lower.
   if (dealEval) return detailed ? 4500 : 3200;
-  if (detailed) return 4000;
+  if (detailed || isFounderIdentityTopic(message)) return 4000;
   if (hasFiles) return 2800;
   return 1400;
 }
@@ -229,11 +243,15 @@ export function buildBrokSystemPrompt(
     INNEAGRAM_RE.test(corpus) && !IEM_EXPLICIT_RE.test(corpus);
   const dealEval =
     isDealOrHighStakesEvaluation(message, opts) && !wantsInneagram;
+  const founderIdentity = isFounderIdentityTopic(message);
+  const founderValues = isFounderValuesTopic(message);
   const pockProgress =
+    !founderIdentity &&
     /\bpock\b|\$pock/i.test(message) &&
     /\b(progress|latest|update|community|roadmap|milestone|development|news|launch|soft\s*launch)\b/i.test(
       message
     );
+  const liveProgress = isLiveProgressTopic(message);
 
   let prompt = BROK_CORE;
   if (opts?.pageContextBlock?.trim()) {
@@ -241,7 +259,9 @@ export function buildBrokSystemPrompt(
     prompt += `\n\n${opts.pageContextBlock.trim()}`;
   }
   if (!opts?.compact && opts?.knowledgeBlock?.trim()) {
-    prompt += FAQ_KNOWLEDGE_HINT;
+    prompt += founderIdentity
+      ? `\n\nCONTEXT BLOCKS (founder identity — prefer Kiron Canon for ethics/values/product design; X feed for dated progress; Grokipedia for public bio):\n`
+      : FAQ_KNOWLEDGE_HINT;
     prompt += `\n\n${opts.knowledgeBlock.trim()}`;
   }
   if (!opts?.compact) {
@@ -255,14 +275,15 @@ export function buildBrokSystemPrompt(
     prompt += `\n\n${formatIemReferenceForPrompt()}`;
     prompt += IEM_DEAL_OUTPUT_HINT;
   }
-  const detailed = wantsDetailedAnswer(message);
-  if (detailed && !opts?.compact) {
+  const detailed =
+    wantsDetailedAnswer(message) || wantsFounderDetailedAnswer(message);
+  if ((detailed || founderIdentity) && !opts?.compact) {
     prompt += DETAILED_ANSWER_HINT;
-  } else if (!opts?.compact && !dealEval) {
+  } else if (!opts?.compact && !dealEval && !founderIdentity) {
     prompt += CASUAL_BREVITY_HINT;
   }
   if (
-    (wantsThirdPartyValidation(message) || isRonaldIngramBioTopic(message)) &&
+    (wantsThirdPartyValidation(message) || founderIdentity) &&
     !opts?.compact
   ) {
     prompt += GROKIPEDIA_SOURCE_HINT;
@@ -270,18 +291,24 @@ export function buildBrokSystemPrompt(
   if (isRonaldIngramBioTopic(message) && !opts?.compact) {
     prompt += RONALD_INGRAM_BIO_HINT;
   }
-  if ((prefersGrokPrimary(message) || pockProgress) && !opts?.compact) {
+  if (founderValues && !opts?.compact) {
+    prompt += FOUNDER_VALUES_HINT;
+  }
+  // Markets hint only for live progress/prices — not ethics/values essays
+  if ((liveProgress || prefersGrokPrimary(message)) && !founderIdentity && !opts?.compact) {
     prompt += MARKET_GROK_HINT;
   }
   if (
     (pockProgress ||
-      (/\bpock\b|\$pock/i.test(message) && prefersGrokPrimary(message))) &&
+      (!founderIdentity &&
+        /\bpock\b|\$pock/i.test(message) &&
+        prefersGrokPrimary(message))) &&
     !opts?.compact
   ) {
     prompt += POCK_COMMUNITY_HINT;
   }
   if (wantsBioAge) prompt += BIOAGE_HINT;
-  if (wantsKiron) prompt += KIRON_HINT;
+  if (wantsKiron && !founderIdentity) prompt += KIRON_HINT;
   if (wantsCapabilities) prompt += CAPABILITIES_HINT;
   if (wantsInneagram) prompt += INNEAGRAM_HINT;
   return prompt;

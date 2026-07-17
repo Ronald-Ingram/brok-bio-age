@@ -24,8 +24,10 @@ import {
   upsertUserFacts,
 } from "@/lib/brokUserFacts";
 import {
+  isFounderIdentityTopic,
+  isLiveProgressTopic,
   isRonaldIngramBioTopic,
-  prefersGrokPrimary,
+  wantsFounderDetailedAnswer,
   wantsThirdPartyValidation,
 } from "@/lib/brokTopicRouting";
 import { fetchGrokipediaRonaldIngram } from "@/lib/grokipedia";
@@ -155,19 +157,15 @@ export async function POST(req: Request) {
       ? formatPageContextForPrompt(body.page_context, { compact: !pageAware })
       : undefined;
 
-    const detailed = wantsDetailedAnswer(message);
-    const marketOrProgress =
-      prefersGrokPrimary(message) ||
-      isRonaldIngramBioTopic(message) ||
-      /\b(progress|latest|update|community|roadmap|milestone|development|news|launch)\b/i.test(
-        message
-      );
-
-    // For live/progress topics: founder X feed FIRST; lighten pure Canon dump dominance.
+    const detailed =
+      wantsDetailedAnswer(message) || wantsFounderDetailedAnswer(message);
+    const founderIdentity = isFounderIdentityTopic(message);
+    const liveProgress = isLiveProgressTopic(message);
+    // Live/progress: X feed first, lighter Canon. Founder identity/values: full Canon first.
     const { knowledgeBlock, userFactsBlock } = await buildKnowledgeContext(
       message,
       meteredUserId,
-      { detailed: detailed && !marketOrProgress }
+      { detailed: detailed || founderIdentity || !liveProgress }
     );
 
     const parts: string[] = [];
@@ -178,26 +176,49 @@ export async function POST(req: Request) {
     );
     if (prices) parts.push(prices);
 
-    // Founder X feed: $POCK/BROK/Neobanx + geopolitics, banking, biohack, forecasts, etc.
-    if (marketOrProgress || shouldInjectFounderXFeed(message)) {
-      const xFeed = await buildRonaldIngramXKnowledgeBlock(message).catch(
-        () => null
-      );
-      if (xFeed) parts.push(xFeed);
-    }
-    if (isRonaldIngramBioTopic(message) || wantsThirdPartyValidation(message)) {
-      const gp = await fetchGrokipediaRonaldIngram().catch(() => null);
-      if (gp) parts.push(gp);
-    }
-    // Product FAQ/canon still useful, but after live feed for progress questions
-    if (knowledgeBlock?.trim()) {
-      if (marketOrProgress) {
+    if (founderIdentity) {
+      // Canon/ethics primary for values/history questions
+      if (knowledgeBlock?.trim()) {
         parts.push(
-          "PRODUCT CANON / FAQ (secondary for progress questions — mechanics only):\n" +
+          "KIRON CANON / FAQ / MEMORY (primary for ethics, integrity, product design, values):\n" +
             knowledgeBlock
         );
-      } else {
-        parts.push(knowledgeBlock);
+      }
+      const gp = await fetchGrokipediaRonaldIngram().catch(() => null);
+      if (gp) parts.push(gp);
+      // X feed secondary — dated launch/progress only
+      if (shouldInjectFounderXFeed(message) || /\$?pock|brok|launch/i.test(message)) {
+        const xFeed = await buildRonaldIngramXKnowledgeBlock(message).catch(
+          () => null
+        );
+        if (xFeed) {
+          parts.push(
+            "FOUNDER X FEED (secondary — use only for dated progress/launch claims):\n" +
+              xFeed
+          );
+        }
+      }
+    } else {
+      // Live/progress: founder X feed first; lighten pure Canon dump dominance
+      if (liveProgress || shouldInjectFounderXFeed(message)) {
+        const xFeed = await buildRonaldIngramXKnowledgeBlock(message).catch(
+          () => null
+        );
+        if (xFeed) parts.push(xFeed);
+      }
+      if (isRonaldIngramBioTopic(message) || wantsThirdPartyValidation(message)) {
+        const gp = await fetchGrokipediaRonaldIngram().catch(() => null);
+        if (gp) parts.push(gp);
+      }
+      if (knowledgeBlock?.trim()) {
+        if (liveProgress) {
+          parts.push(
+            "PRODUCT CANON / FAQ (secondary for progress questions — mechanics only):\n" +
+              knowledgeBlock
+          );
+        } else {
+          parts.push(knowledgeBlock);
+        }
       }
     }
     const knowledgeWithSources = parts.length ? parts.join("\n\n") : knowledgeBlock;
