@@ -1,6 +1,7 @@
 import { ApiAuthError, requireAuthenticatedUser } from "@/lib/apiAuth";
 import {
   getActiveThreadForUser,
+  listThreadsForUser,
   startNewThread,
 } from "@/lib/brokChatThreads";
 import { loadUserFacts } from "@/lib/brokUserFacts";
@@ -12,10 +13,20 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const threadId = url.searchParams.get("thread_id");
   const userIdParam = url.searchParams.get("user_id");
+  const list = url.searchParams.get("list") === "1";
 
   try {
     const userId = await requireAuthenticatedUser(req, userIdParam);
-    const thread = await getActiveThreadForUser(userId, threadId);
+
+    if (list) {
+      const threads = await listThreadsForUser(userId, 30);
+      return NextResponse.json({ threads });
+    }
+
+    // Explicit thread only — no auto-resume of "latest" (clean default session).
+    const thread = threadId
+      ? await getActiveThreadForUser(userId, threadId)
+      : null;
     const facts = await loadUserFacts(userId);
 
     if (!thread) {

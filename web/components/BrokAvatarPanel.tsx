@@ -46,7 +46,27 @@ type ChatTurn = {
   content: string;
 };
 
+/** Session-scoped so a new browser session starts clean (Dave / multi-login UX). */
 const threadStorageKey = (userId: string) => `brok_thread_id:${userId}`;
+
+function readStoredThreadId(userId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return sessionStorage.getItem(threadStorageKey(userId));
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredThreadId(userId: string, threadId: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (threadId) sessionStorage.setItem(threadStorageKey(userId), threadId);
+    else sessionStorage.removeItem(threadStorageKey(userId));
+  } catch {
+    /* private mode */
+  }
+}
 
 interface BrokStatus {
   brokApi: boolean;
@@ -102,6 +122,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [iemReport, setIemReport] = useState<IemReportPayload | null>(null);
   const [inneagramOpen, setInneagramOpen] = useState(false);
   const [canvasOpen, setCanvasOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [threadList, setThreadList] = useState<
+    { id: string; title: string | null; updated_at: string }[]
+  >([]);
   const [error, setError] = useState<string | null>(null);
   const [voiceOn, setVoiceOn] = useState(true);
   const [avatarOn, setAvatarOn] = useState(false);
@@ -162,14 +186,18 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       return;
     }
 
-    const stored =
-      typeof window !== "undefined"
-        ? localStorage.getItem(threadStorageKey(user.id))
-        : null;
+    // Only restore if this browser session already chose a thread (sessionStorage).
+    const stored = readStoredThreadId(user.id);
+    if (!stored) {
+      setThreadId(null);
+      setChatTurns([]);
+      setResponse("");
+      return;
+    }
 
     setHistoryLoading(true);
     try {
-      const qs = stored ? `?thread_id=${encodeURIComponent(stored)}` : "";
+      const qs = `?thread_id=${encodeURIComponent(stored)}`;
       const res = await fetch(`/api/brok/threads${qs}`, {
         headers: await brokAuthHeaders(),
       });
@@ -182,10 +210,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
 
       if (data.thread_id) {
         setThreadId(data.thread_id);
-        localStorage.setItem(threadStorageKey(user.id), data.thread_id);
+        writeStoredThreadId(user.id, data.thread_id);
       } else {
         setThreadId(null);
-        localStorage.removeItem(threadStorageKey(user.id));
+        writeStoredThreadId(user.id, null);
       }
 
       // API returns oldest→newest; UI keeps newest first for heavy-user scanning.
@@ -205,6 +233,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const startNewConversation = async () => {
     if (!user?.id) return;
     setError(null);
+    setHistoryOpen(false);
     try {
       const res = await fetch("/api/brok/threads", {
         method: "POST",
@@ -219,12 +248,65 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         throw new Error(data.error ?? "new_thread_failed");
       }
       setThreadId(data.thread_id);
-      localStorage.setItem(threadStorageKey(user.id), data.thread_id);
+      writeStoredThreadId(user.id, data.thread_id);
       setChatTurns([]);
       setResponse("");
       setMessage("");
+      setPendingFiles([]);
+      setFileContexts([]);
+      setFileIds([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start new conversation");
+    }
+  };
+
+  const loadThreadList = async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch("/api/brok/threads?list=1", {
+        headers: await brokAuthHeaders(),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        threads?: { id: string; title: string | null; updated_at: string }[];
+      };
+      setThreadList(data.threads ?? []);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const openHistory = async () => {
+    setHistoryOpen((v) => !v);
+    if (!historyOpen) await loadThreadList();
+  };
+
+  const loadConversation = async (id: string) => {
+    if (!user?.id) return;
+    setHistoryOpen(false);
+    setHistoryLoading(true);
+    setError(null);
+    try {
+      writeStoredThreadId(user.id, id);
+      setThreadId(id);
+      const res = await fetch(
+        `/api/brok/threads?thread_id=${encodeURIComponent(id)}`,
+        { headers: await brokAuthHeaders() }
+      );
+      if (!res.ok) throw new Error("load_thread_failed");
+      const data = (await res.json()) as {
+        thread_id?: string | null;
+        messages?: ChatTurn[];
+      };
+      const turns = [...(data.messages ?? [])].reverse();
+      setChatTurns(turns);
+      const lastAssistant = turns.find((m) => m.role === "assistant");
+      setResponse(lastAssistant?.content ?? "");
+      setMessage("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not open conversation");
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -563,9 +645,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       );
       if (data.thread_id) {
         setThreadId(data.thread_id);
-        if (user?.id) {
-          localStorage.setItem(threadStorageKey(user.id), data.thread_id);
-        }
+        if (user?.id) writeStoredThreadId(user.id, data.thread_id);
       }
       const ts = Date.now();
       setChatTurns((prev) => [
@@ -844,19 +924,62 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             : "p-5 space-y-4"
         }`}
       >
-        <div className="flex items-center justify-between gap-2 order-1">
+        <div className="flex items-center justify-between gap-2 order-1 flex-wrap">
           <span className="text-xs uppercase tracking-wider text-white/40">
             Conversation
           </span>
-          <button
-            type="button"
-            onClick={() => void startNewConversation()}
-            disabled={!user?.id || loading}
-            className="text-[10px] text-white/40 hover:text-neon-cyan/80 underline disabled:opacity-40"
-          >
-            New conversation
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void openHistory()}
+              disabled={!user?.id || loading}
+              className="text-[11px] px-2.5 py-1 rounded-lg border border-white/15 text-white/60 hover:border-neon-cyan/40 hover:text-neon-cyan disabled:opacity-40"
+            >
+              History
+            </button>
+            <button
+              type="button"
+              onClick={() => void startNewConversation()}
+              disabled={!user?.id || loading}
+              className="text-[11px] px-2.5 py-1 rounded-lg border border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan font-medium hover:bg-neon-cyan/20 disabled:opacity-40"
+            >
+              New chat
+            </button>
+          </div>
         </div>
+
+        {historyOpen && (
+          <div className="order-1 rounded-xl border border-white/10 bg-black/40 p-3 space-y-2 max-h-48 overflow-y-auto">
+            <p className="text-[10px] uppercase tracking-wider text-white/40">
+              Past chats — open without mixing into a new session
+            </p>
+            {threadList.length === 0 ? (
+              <p className="text-xs text-white/40">No saved chats yet.</p>
+            ) : (
+              threadList.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => void loadConversation(t.id)}
+                  className={`w-full text-left text-xs px-2 py-1.5 rounded-lg border transition-colors ${
+                    t.id === threadId
+                      ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
+                      : "border-white/10 text-white/65 hover:border-white/25"
+                  }`}
+                >
+                  <span className="block truncate font-medium">
+                    {t.title?.trim() || "Conversation"}
+                  </span>
+                  <span className="text-[10px] text-white/35">
+                    {t.updated_at
+                      ? new Date(t.updated_at).toLocaleString()
+                      : ""}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        )}
 
         {stacked && (
           <div className="flex flex-wrap gap-2 order-1 sm:hidden">

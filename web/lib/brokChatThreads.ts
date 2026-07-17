@@ -121,17 +121,8 @@ export async function getActiveThreadForUser(
     if (!owned?.id) resolvedId = null;
   }
 
-  if (!resolvedId) {
-    const { data: latest } = await supabase
-      .from("brok_chat_threads")
-      .select("id")
-      .eq("user_id", userId)
-      .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    resolvedId = (latest?.id as string | undefined) ?? null;
-  }
-
+  // No thread_id → clean session (Dave request: avoid auto-resuming old chat on login).
+  // Callers pass an explicit id to continue or load history.
   if (!resolvedId) return null;
 
   const { data: thread } = await supabase
@@ -168,4 +159,32 @@ export async function startNewThread(
     pagePathname: opts?.pagePathname,
     titleSeed: "New conversation",
   });
+}
+
+export type ThreadListItem = {
+  id: string;
+  title: string | null;
+  updated_at: string;
+  page_pathname: string | null;
+};
+
+/** Recent threads for History tab (newest first). */
+export async function listThreadsForUser(
+  userId: string,
+  limit = 25
+): Promise<ThreadListItem[]> {
+  const supabase = getServiceSupabase();
+  const { data } = await supabase
+    .from("brok_chat_threads")
+    .select("id, title, updated_at, page_pathname")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    title: (row.title as string | null) ?? null,
+    updated_at: row.updated_at as string,
+    page_pathname: (row.page_pathname as string | null) ?? null,
+  }));
 }

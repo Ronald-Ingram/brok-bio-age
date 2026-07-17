@@ -23,12 +23,16 @@ export type MarketQuote = {
   note?: string;
 };
 
-const TICKER_RE =
-  /(?:\$|ticker[:\s]+|price\s+of\s+|how\s+(?:much|is)\s+|quote\s+(?:for\s+)?|stock\s+price\s+(?:of\s+)?)\s*([A-Za-z]{1,6})\b/gi;
+/** Explicit finance intent → capture symbol after cue (not bare English). */
+const EXPLICIT_TICKER_RE =
+  /(?:\$|ticker[:\s]+|price\s+of\s+|quote\s+(?:for\s+)?|stock\s+price\s+(?:of\s+)?|share\s+price\s+(?:of\s+)?|how\s+much\s+is\s+)\s*([A-Za-z]{1,6})\b/gi;
 const CRYPTO_NAME_RE =
   /\b(bitcoin|btc|ethereum|eth|solana|sol|dogecoin|doge|ripple|xrp|cardano|ada|avalanche|avax|chainlink|link|polygon|matic|pol|litecoin|ltc|pepe|bonk|wif|jup|jupiter|pock|\$pock)\b/gi;
 const STOCK_NAME_RE =
   /\b(apple|microsoft|google|alphabet|amazon|nvidia|tesla|meta|facebook|netflix|amd|intel|coinbase|microstrategy|berkshire|jpmorgan|goldman|sp500|s&p\s*500|nasdaq|dow)\b/gi;
+
+/** Message is essentially a single symbol: "AAPL", "$NVDA", "tsla?" */
+const SOLO_TICKER_RE = /^\$?([A-Za-z]{1,5})\??$/;
 
 /** Map common names/tickers → CoinGecko ids */
 const CRYPTO_IDS: Record<string, string> = {
@@ -97,50 +101,81 @@ const STOCK_SYMBOLS: Record<string, string> = {
   dow: "^DJI",
 };
 
-const SKIP_TICKERS = new Set([
-  "a",
-  "i",
-  "the",
-  "and",
-  "or",
-  "for",
-  "of",
-  "to",
-  "on",
-  "in",
-  "is",
-  "it",
-  "my",
-  "me",
-  "us",
-  "we",
-  "at",
-  "by",
-  "as",
-  "be",
-  "so",
-  "if",
-  "do",
-  "an",
-  "no",
-  "yes",
-  "long",
-  "form",
-  "tell",
-  "about",
-  "what",
-  "how",
-  "why",
-  "when",
-  "latest",
-  "price",
-  "stock",
-  "crypto",
-  "token",
-  "brok",
-  "pock", // handled via crypto path / founder feed
-]);
+/**
+ * Common English / chat words that are also (or look like) ticker symbols.
+ * NEVER promote these to stocks unless the user used $TICKER or "ticker X".
+ * Fixes Dave report: LIVE, YOU, GIVE, UP, JUST → garbage Yahoo quotes.
+ */
+const ENGLISH_STOP_TICKERS = new Set(
+  [
+    "a","i","the","and","or","for","of","to","on","in","is","it","my","me","us","we",
+    "at","by","as","be","so","if","do","an","no","yes","not","all","any","can","may",
+    "our","out","own","too","very","just","like","also","than","then","that","this",
+    "with","from","into","over","under","about","after","before","what","how","why",
+    "when","where","who","which","will","would","could","should","have","has","had",
+    "are","was","were","been","being","get","got","make","made","take","give","gave",
+    "live","life","love","look","long","last","late","less","more","most","much",
+    "many","some","such","only","other","into","over","such","same","tell","told",
+    "want","need","help","know","think","feel","come","came","go","goes","went",
+    "see","saw","say","said","put","set","let","try","use","used","keep","kept",
+    "call","back","good","best","better","great","full","free","open","next","new",
+    "old","big","small","high","low","real","true","false","yes","ok","okay","hey",
+    "hi","hello","thanks","thank","please","sorry","sure","well","now","here","there",
+    "today","once","again","still","even","ever","never","always","maybe","really",
+    "actually","basically","literally","you","your","yours","he","she","they","them",
+    "their","his","her","its","our","ours","up","down","off","out","away","here",
+    "form","long","tell","about","latest","price","stock","stocks","crypto","token",
+    "tokens","share","shares","market","markets","trade","trades","trading","invest",
+    "quote","quotes","worth","value","cap","spot","buy","sell","hold","cash","fund",
+    "brok","brock","pock","spock","kiron","neobanx","chat","voice","avatar","send",
+    "type","text","mic","speak","talk","read","show","list","info","data","news",
+    "update","post","posts","link","page","app","user","users","team","plan","goal",
+    "idea","work","works","working","start","stop","end","done","next","step","steps",
+    "one","two","three","four","five","first","last","part","parts","item","items",
+    "time","times","day","days","week","year","years","now","soon","later","early",
+    "right","left","side","way","ways","kind","type","sort","bit","lot","lots",
+    "guy","guys","man","men","woman","women","people","person","world","life",
+    "give","gave","given","take","took","taken","bring","brought","find","found",
+    "keep","kept","leave","left","turn","turned","run","ran","move","moved",
+    "play","played","win","won","lose","lost","pay","paid","cost","costs",
+    "grow","grew","rise","fell","fall","drop","jump","gain","loss","risk",
+    "safe","hard","easy","fast","slow","near","far","top","bottom","mid",
+    "main","core","base","key","note","notes","fact","facts","rule","rules",
+    "code","file","files","line","lines","word","words","name","names",
+    "home","away","city","state","country","area","zone","level","mode",
+    "on","off","in","out","up","down","yes","no","ok","id","am","pm",
+    "usd","eur","gbp","jpy","cny","btc","eth","sol", // crypto handled separately
+  ].map((w) => w.toLowerCase())
+);
 
+function isBlockedEnglishTicker(sym: string): boolean {
+  return ENGLISH_STOP_TICKERS.has(sym.toLowerCase());
+}
+
+function addStockCandidate(
+  stocks: Set<string>,
+  raw: string,
+  opts: { allowEnglish?: boolean } = {}
+): void {
+  const sym = raw.toUpperCase().replace(/[^A-Z.\-]/g, "");
+  if (!sym || sym.length > 5) return;
+  const low = sym.toLowerCase();
+  if (low === "pock" || low === "brok") return;
+  if (CRYPTO_IDS[low]) return; // crypto path
+  if (!opts.allowEnglish && isBlockedEnglishTicker(sym)) return;
+  if (STOCK_SYMBOLS[low]) {
+    stocks.add(STOCK_SYMBOLS[low]);
+    return;
+  }
+  // Unknown symbols: only if not common English (or allowEnglish via $TICKER)
+  if (isBlockedEnglishTicker(sym) && !opts.allowEnglish) return;
+  if (sym.length >= 1 && sym.length <= 5) stocks.add(sym);
+}
+
+/**
+ * Extract market queries from the *current user message only*.
+ * Strict: no bare English words as tickers (Dave bug: LIVE/YOU/GIVE/UP/JUST).
+ */
 export function extractMarketQueries(message: string): {
   cryptos: string[];
   stocks: string[];
@@ -148,10 +183,12 @@ export function extractMarketQueries(message: string): {
   const cryptos = new Set<string>();
   const stocks = new Set<string>();
   const m = message.toLowerCase();
+  const trimmed = message.trim();
 
+  // 1) Named cryptos / stocks
   for (const match of message.matchAll(CRYPTO_NAME_RE)) {
     const k = match[1]!.toLowerCase().replace("$", "");
-    cryptos.add(k);
+    if (k) cryptos.add(k);
   }
   for (const match of message.matchAll(STOCK_NAME_RE)) {
     const k = match[1]!.toLowerCase().replace(/\s+/g, "");
@@ -159,54 +196,77 @@ export function extractMarketQueries(message: string): {
     if (sym) stocks.add(sym);
   }
 
-  // Explicit tickers like $AAPL or "ticker NVDA" or "price of TSLA"
+  // 2) Explicit cues: $AAPL, ticker NVDA, price of TSLA, quote for …
   let t: RegExpExecArray | null;
-  const re = new RegExp(TICKER_RE.source, "gi");
+  const re = new RegExp(EXPLICIT_TICKER_RE.source, "gi");
   while ((t = re.exec(message)) !== null) {
-    const raw = t[1]!.toUpperCase();
+    const raw = t[1]!;
     const low = raw.toLowerCase();
-    if (SKIP_TICKERS.has(low)) continue;
-    if (CRYPTO_IDS[low]) cryptos.add(low);
-    else if (raw.length <= 5) stocks.add(raw);
+    if (CRYPTO_IDS[low] || low === "pock") {
+      cryptos.add(low === "pock" ? "pock" : low);
+      continue;
+    }
+    // Block common English even after "price of" / "$" (e.g. "price of love", "$LIVE")
+    if (isBlockedEnglishTicker(raw)) continue;
+    addStockCandidate(stocks, raw);
   }
 
-  // Bare tickers: market-ish questions OR short query that is mostly a symbol
-  const marketish =
-    /\b(price|quote|stock|shares?|market|trading|invest|crypto|bitcoin|ticker|how\s+much)\b/i.test(
-      m
-    ) || /^[A-Za-z.\-]{1,6}(\s+[A-Za-z.\-]{1,6}){0,4}$/.test(message.trim());
-  if (marketish) {
-    for (const match of message.matchAll(/\b([A-Za-z]{1,5})\b/g)) {
-      const raw = match[1]!.toUpperCase();
-      const low = raw.toLowerCase();
-      if (SKIP_TICKERS.has(low) || raw.length < 1) continue;
-      if (CRYPTO_IDS[low]) cryptos.add(low);
-      else if (STOCK_SYMBOLS[low]) stocks.add(STOCK_SYMBOLS[low]);
-      else if (raw.length >= 1 && raw.length <= 5) stocks.add(raw);
+  // 3) Solo symbol message: "AAPL" / "$NVDA?"
+  const solo = trimmed.match(SOLO_TICKER_RE);
+  if (solo) {
+    const raw = solo[1]!;
+    const low = raw.toLowerCase();
+    if (CRYPTO_IDS[low] || low === "pock") {
+      cryptos.add(low === "pock" ? "pock" : low);
+    } else if (!isBlockedEnglishTicker(raw) || STOCK_SYMBOLS[low]) {
+      addStockCandidate(stocks, raw);
     }
   }
-  // Deduplicate stock symbols
-  const stockList = [...new Set([...stocks])];
-  stocks.clear();
-  for (const s of stockList) stocks.add(s);
 
-  // $POCK always crypto path when mentioned with price/market
-  if (/\b\$?pock\b/i.test(message) && /\b(price|worth|market|trade|jupiter)\b/i.test(m)) {
+  // 4) ALL-CAPS tokens (2–5) only with clear finance intent
+  //    e.g. "What's NVDA doing?" — not "PLEASE GIVE ME LIVE UPDATES"
+  const financeIntent =
+    /\b(price|quote|ticker|stock|stocks|shares?|equity|equities|etf|nasdaq|nyse|s&p|dow|portfolio|earnings|dividend|ipo|market\s*cap|share\s*price|spot\s*price|trading\s+at|how\s+much\s+is|worth\s+now)\b/i.test(
+      m
+    ) || /\$[A-Za-z]{1,5}\b/.test(message);
+  if (financeIntent) {
+    for (const match of message.matchAll(/\b([A-Z]{2,5})\b/g)) {
+      const raw = match[1]!;
+      if (isBlockedEnglishTicker(raw)) continue;
+      const low = raw.toLowerCase();
+      if (CRYPTO_IDS[low]) {
+        cryptos.add(low);
+        continue;
+      }
+      addStockCandidate(stocks, raw);
+    }
+    // Known lowercase tickers when finance intent: "aapl price"
+    for (const match of message.matchAll(/\b([a-z]{2,5})\b/g)) {
+      const low = match[1]!;
+      if (STOCK_SYMBOLS[low]) stocks.add(STOCK_SYMBOLS[low]);
+      if (CRYPTO_IDS[low]) cryptos.add(low);
+    }
+  }
+
+  // $POCK with price/market language
+  if (
+    /\b\$?pock\b/i.test(message) &&
+    /\b(price|worth|market|trade|jupiter|quote)\b/i.test(m)
+  ) {
     cryptos.add("pock");
   }
 
   return {
     cryptos: [...cryptos].slice(0, 6),
-    stocks: [...stocks].slice(0, 6),
+    stocks: [...stocks].filter((s) => !isBlockedEnglishTicker(s)).slice(0, 6),
   };
 }
 
 export function wantsMarketPrices(message: string): boolean {
   const { cryptos, stocks } = extractMarketQueries(message);
   if (cryptos.length || stocks.length) return true;
-  return /\b(price|quote|how\s+much\s+is|market\s+cap|trading\s+at|share\s+price|spot\s+price)\b/i.test(
-    message
-  );
+  // Intent alone is not enough — prevents "market" in prose from forcing empty/noise fetches
+  return false;
 }
 
 const BROWSER_UA =
@@ -485,14 +545,19 @@ RESPONSE RULES FOR PRICES:
 export async function buildMarketPricesKnowledgeBlock(
   message: string
 ): Promise<string | null> {
-  if (!wantsMarketPrices(message) && !extractMarketQueries(message).cryptos.length) {
-    // Still try if message clearly asks price of something
-    if (!/\b(price|quote|worth|trading\s+at)\b/i.test(message)) return null;
-  }
+  // Only when we extracted real symbols — never on vague "market" prose alone.
+  if (!wantsMarketPrices(message)) return null;
   try {
     const quotes = await fetchMarketQuotes(message);
-    if (!quotes.length) return null;
-    return formatMarketQuotesBlock(quotes);
+    // Drop failed/unknown placeholders so the model is not fed junk tickers.
+    const usable = quotes.filter(
+      (q) =>
+        q.price != null &&
+        q.source !== "unavailable" &&
+        !isBlockedEnglishTicker(q.symbol)
+    );
+    if (!usable.length) return null;
+    return formatMarketQuotesBlock(usable);
   } catch {
     return null;
   }
