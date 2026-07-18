@@ -32,6 +32,7 @@ import {
   User,
   UserX,
   Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -131,15 +132,67 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     { id: string; title: string | null; updated_at: string }[]
   >([]);
   const [error, setError] = useState<string | null>(null);
-  const [voiceOn, setVoiceOn] = useState(true);
+  // Default Voice OFF — credit-saving; persist preference (user feedback: feel cheated when it re-enables).
+  const [voiceOn, setVoiceOn] = useState(false);
   const [avatarOn, setAvatarOn] = useState(false);
+  const [prefsHydrated, setPrefsHydrated] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(false);
   const [speakProgress, setSpeakProgress] = useState<string | null>(null);
   const [lastUserMessage, setLastUserMessage] = useState("");
   const [lastModel, setLastModel] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speakAbortRef = useRef(false);
   const messageRef = useRef(message);
   messageRef.current = message;
+
+  const VOICE_PREF_KEY = "brok_voice_on";
+  const AVATAR_PREF_KEY = "brok_avatar_on";
+
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem(VOICE_PREF_KEY);
+      const a = localStorage.getItem(AVATAR_PREF_KEY);
+      // Voice defaults OFF (saves credits). Only "1" re-enables; missing/legacy → off + persist.
+      const voiceEnabled = v === "1";
+      setVoiceOn(voiceEnabled);
+      if (v !== "1" && v !== "0") {
+        localStorage.setItem(VOICE_PREF_KEY, "0");
+      }
+      const avatarEnabled = a === "1";
+      setAvatarOn(avatarEnabled);
+      if (a !== "1" && a !== "0") {
+        localStorage.setItem(AVATAR_PREF_KEY, "0");
+      }
+    } catch {
+      setVoiceOn(false);
+      setAvatarOn(false);
+    }
+    setPrefsHydrated(true);
+  }, []);
+
+  const setVoiceOnPersist = useCallback((next: boolean | ((p: boolean) => boolean)) => {
+    setVoiceOn((prev) => {
+      const value = typeof next === "function" ? next(prev) : next;
+      try {
+        localStorage.setItem(VOICE_PREF_KEY, value ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return value;
+    });
+  }, []);
+
+  const setAvatarOnPersist = useCallback((next: boolean | ((p: boolean) => boolean)) => {
+    setAvatarOn((prev) => {
+      const value = typeof next === "function" ? next(prev) : next;
+      try {
+        localStorage.setItem(AVATAR_PREF_KEY, value ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return value;
+    });
+  }, []);
 
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
   /** True when the user used mic (or we should re-arm) for continuous voice dialogue. */
@@ -375,12 +428,33 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     };
   };
 
+  const stopSpeaking = useCallback(() => {
+    speakAbortRef.current = true;
+    try {
+      heygenRef.current?.stopSpeaking?.();
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.removeAttribute("src");
+        audioRef.current.load();
+      }
+    } catch {
+      /* ignore */
+    }
+    setVoiceLoading(false);
+    setSpeakProgress(null);
+  }, []);
+
   const playBrokVoice = async (
     text: string,
     userMessage: string,
     opts?: { force?: boolean }
   ) => {
     if (!voiceOn || (useHeyGenLive && !opts?.force)) return;
+    if (speakAbortRef.current) return;
     setVoiceLoading(true);
     try {
       const payload = speechPayload(text, userMessage);
@@ -393,6 +467,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           user_id: user?.id,
         }),
       });
+      if (speakAbortRef.current) return;
       if (!res.ok) {
         const raw = await res.text();
         let msg = "Voice unavailable";
@@ -407,11 +482,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      if (audioRef.current) {
+      if (audioRef.current && !speakAbortRef.current) {
         const audio = audioRef.current;
         audio.src = url;
         forceFullMediaVolume(audio);
-        // Wait until playback finishes (with timeout — iOS sometimes never fires "ended").
         await new Promise<void>((resolve) => {
           let settled = false;
           const done = () => {
@@ -428,10 +502,12 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             }
             resolve();
           };
-          // If playback stalls or iOS drops the ended event, free the UI within ~2 min max.
           const safety = window.setTimeout(done, 120_000);
           const onPauseMaybeDone = () => {
-            // Treat near-end pause as done (common iOS quirk).
+            if (speakAbortRef.current) {
+              done();
+              return;
+            }
             if (
               audio.duration &&
               Number.isFinite(audio.duration) &&
@@ -455,30 +531,60 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   };
 
   const speakResponse = async (text: string, userMessage: string) => {
+    // Respect Voice off — never auto-speak unless Voice or Avatar is on.
+    if (!voiceOn && !avatarOn) return;
+    speakAbortRef.current = false;
     const payload = speechPayload(text, userMessage);
-    if (useHeyGenLive && heygenRef.current) {
+    if (avatarOn && status?.heygen && heygenRef.current) {
       setVoiceLoading(true);
-      setSpeakProgress("Speaking full answer…");
+      setSpeakProgress("Avatar speaking… tap Stop to cut off");
       try {
-        // One silent retry path lives inside speak(); if still down, voice-only fallback.
         await heygenRef.current.speak(payload.text, true);
-        setError(null);
+        if (!speakAbortRef.current) setError(null);
       } catch (e) {
+        if (speakAbortRef.current) return;
         const msg = sanitizeBrokAvatarError(
           e instanceof Error ? e.message : "avatar_speech_failed"
         );
         setError(
           `${msg} Playing ${BROK_VOICE_CLONE_LABEL} for the full answer (text above is complete).`
         );
-        await playBrokVoice(text, userMessage, { force: true });
+        if (voiceOn) await playBrokVoice(text, userMessage, { force: true });
       } finally {
         setVoiceLoading(false);
         setSpeakProgress(null);
       }
       return;
     }
+    if (avatarOn && !status?.heygen) {
+      setError(
+        "Avatar service is offline — turn Avatar off or try again. Voice can still speak if enabled."
+      );
+    }
     await playBrokVoice(text, userMessage);
   };
+
+  const toggleAvatar = useCallback(() => {
+    setAvatarOnPersist((on) => {
+      const next = !on;
+      if (next) {
+        // Turning ON — clear prior errors; show offline only if status already loaded without HeyGen.
+        if (status && !status.heygen) {
+          setError(
+            "Live Avatar is not configured on this environment yet. Avatar toggle works; connect HeyGen to go live."
+          );
+        } else {
+          setError(null);
+        }
+      } else {
+        // Turning OFF — always stop speech/credits burn immediately.
+        stopSpeaking();
+        setHeygenLive(false);
+        setError(null);
+      }
+      return next;
+    });
+  }, [setAvatarOnPersist, status, stopSpeaking]);
 
   const addPendingFiles = (incoming: FileList | File[]) => {
     const next = [...pendingFiles];
@@ -784,7 +890,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           onFocus={() => {
             if (listening) stopListening();
           }}
-          rows={3}
+          rows={6}
           enterKeyHint="send"
           autoComplete="off"
           autoCorrect="on"
@@ -795,7 +901,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 ? "BROK is thinking…"
                 : "Type or tap Mic to speak…"
           }
-          className={`flex-1 min-w-0 px-3 py-3 rounded-xl bg-black/50 border text-base sm:text-sm resize-y min-h-[88px] sm:min-h-[100px] outline-none touch-manipulation ${
+          className={`flex-1 min-w-0 px-3 py-3.5 rounded-xl bg-black/50 border text-base sm:text-sm resize-y min-h-[168px] sm:min-h-[132px] outline-none touch-manipulation ${
             listening
               ? "border-neon-cyan/50 focus:border-neon-cyan/60"
               : "border-white/15 focus:border-neon-cyan/40"
@@ -846,20 +952,36 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         }`}
       >
         <div
-          className={`relative mx-auto w-full max-w-md rounded-xl overflow-hidden border border-neon-cyan/20 bg-black transition-[height] duration-300 ${
-            stacked ? mobileAvatarClass : "aspect-[3/4] min-h-[420px] max-h-[600px]"
-          }`}
+          className={`relative mx-auto w-full max-w-md rounded-xl overflow-hidden bg-black transition-[height,box-shadow,border-color] duration-300 cursor-pointer select-none ${
+            avatarOn
+              ? "border-2 border-neon-cyan/60 shadow-[0_0_24px_rgba(34,211,238,0.18)]"
+              : "border border-neon-cyan/20"
+          } ${stacked ? mobileAvatarClass : "aspect-[3/4] min-h-[420px] max-h-[600px]"}`}
+          onClick={() => toggleAvatar()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              toggleAvatar();
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-pressed={avatarOn}
+          aria-label={avatarOn ? "Turn Avatar off" : "Turn Avatar on"}
+          title={avatarOn ? "Tap face to turn Avatar off" : "Tap face to turn Avatar on"}
         >
           <Image
             src={BROK_REFERENCE_IMAGE}
             alt="BROK static avatar"
             fill
-            className={`object-contain object-center transition-opacity duration-300 ${
+            className={`object-contain object-center transition-opacity duration-300 pointer-events-none ${
               useHeyGenLive && heygenLive && avatarOn ? "opacity-0" : "opacity-100"
             }`}
             priority
           />
-          {useHeyGenLive && avatarOn ? (
+          {/* Mount live session whenever Avatar is ON and HeyGen is configured.
+              Face / empty areas still toggle; interactive controls stopPropagation. */}
+          {avatarOn && status?.heygen ? (
             <div className="absolute inset-0 z-10">
               <HeyGenLiveAvatar
                 ref={heygenRef}
@@ -873,16 +995,38 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               />
             </div>
           ) : null}
-          {!avatarOn && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-end pb-4 bg-black/25 pointer-events-none">
-              <p className="rounded-full border border-white/15 bg-black/50 px-3 py-1 text-[10px] text-white/50">
-                Avatar off · saves credits
-              </p>
-            </div>
+          {/* Explicit chip — always clickable (z-30) so on/off never depends on video layer */}
+          <button
+            type="button"
+            className={`absolute bottom-3 left-1/2 z-30 -translate-x-1/2 rounded-full border px-3 py-1.5 text-[10px] font-medium shadow-lg touch-manipulation ${
+              avatarOn
+                ? "border-neon-cyan/50 bg-neon-cyan/20 text-neon-cyan"
+                : "border-white/20 bg-black/70 text-white/70"
+            }`}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleAvatar();
+            }}
+            aria-pressed={avatarOn}
+          >
+            {avatarOn
+              ? heygenLive
+                ? "Avatar on · Live · tap to off"
+                : status?.heygen
+                  ? "Avatar on · connecting… · tap to off"
+                  : status
+                    ? "Avatar on · offline · tap to off"
+                    : "Avatar on · checking… · tap to off"
+              : "Avatar off · tap to enable · saves credits"}
+          </button>
+          {avatarOn && status?.heygen && !heygenLive && (
+            <p className="absolute top-2 left-2 z-20 rounded bg-black/65 px-2 py-0.5 text-[9px] text-neon-cyan/90 pointer-events-none">
+              Connecting…
+            </p>
           )}
-          {avatarOn && !status?.heygen && (
-            <p className="absolute bottom-0 inset-x-0 text-[10px] text-center py-1.5 bg-black/70 text-amber-300/90 z-10">
-              Static reference · {BROK_AVATAR_LABEL} connecting…
+          {avatarOn && status && !status.heygen && (
+            <p className="absolute top-2 left-2 z-20 rounded bg-black/65 px-2 py-0.5 text-[9px] text-amber-300/90 pointer-events-none">
+              Live Avatar offline on server
             </p>
           )}
         </div>
@@ -891,13 +1035,17 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => setVoiceOn((v) => !v)}
-              disabled={useHeyGenLive}
+              onClick={() => {
+                setVoiceOnPersist((v) => {
+                  if (v) stopSpeaking();
+                  return !v;
+                });
+              }}
               className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border transition-colors ${
-                voiceOn && !useHeyGenLive
+                voiceOn
                   ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
                   : "border-white/15 text-white/45"
-              } ${useHeyGenLive ? "opacity-50 cursor-not-allowed" : ""}`}
+              }`}
             >
               {voiceOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
               Voice {voiceOn ? "on" : "off"}
@@ -907,7 +1055,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             </button>
             <button
               type="button"
-              onClick={() => setAvatarOn((v) => !v)}
+              onClick={() => toggleAvatar()}
               className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border transition-colors ${
                 avatarOn
                   ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
@@ -920,6 +1068,16 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 ({status?.avatarLabel ?? BROK_AVATAR_LABEL})
               </span>
             </button>
+            {(voiceLoading || speakProgress) && (
+              <button
+                type="button"
+                onClick={() => stopSpeaking()}
+                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs border border-red-400/40 bg-red-500/15 text-red-200"
+              >
+                <VolumeX className="w-3.5 h-3.5" />
+                Stop speaking
+              </button>
+            )}
           </div>
           <p className="text-[11px] text-white/40 leading-relaxed">
             {useHeyGenLive && heygenLive
@@ -928,7 +1086,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                 : `${BROK_AVATAR_LABEL} speaking — enable BROK Voice for lip-sync.`
               : useHeyGenLive
                 ? `${BROK_AVATAR_LABEL} connecting…`
-                : "Toggle voice or avatar off for text-only."}
+                : "Voice & Avatar default off (saves credits). Tap face or Avatar to enable. Stop cuts speech immediately."}
           </p>
           {status && !status.voiceReady && (
             <p className="text-[11px] text-amber-300/80 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
@@ -1085,20 +1243,24 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           <div className="flex flex-wrap gap-2 order-1 sm:hidden">
             <button
               type="button"
-              onClick={() => setVoiceOn((v) => !v)}
-              disabled={useHeyGenLive}
+              onClick={() => {
+                setVoiceOnPersist((v) => {
+                  if (v) stopSpeaking();
+                  return !v;
+                });
+              }}
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border transition-colors ${
-                voiceOn && !useHeyGenLive
+                voiceOn
                   ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
                   : "border-white/15 text-white/45"
-              } ${useHeyGenLive ? "opacity-50 cursor-not-allowed" : ""}`}
+              }`}
             >
               {voiceOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-              Voice
+              Voice {voiceOn ? "on" : "off"}
             </button>
             <button
               type="button"
-              onClick={() => setAvatarOn((v) => !v)}
+              onClick={() => toggleAvatar()}
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border transition-colors ${
                 avatarOn
                   ? "border-neon-cyan/40 bg-neon-cyan/10 text-neon-cyan"
@@ -1106,8 +1268,18 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               }`}
             >
               {avatarOn ? <User className="w-3.5 h-3.5" /> : <UserX className="w-3.5 h-3.5" />}
-              Avatar
+              Avatar {avatarOn ? "on" : "off"}
             </button>
+            {(voiceLoading || speakProgress) && (
+              <button
+                type="button"
+                onClick={() => stopSpeaking()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-red-400/40 bg-red-500/15 text-red-200"
+              >
+                <VolumeX className="w-3.5 h-3.5" />
+                Stop
+              </button>
+            )}
           </div>
         )}
 

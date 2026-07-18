@@ -28,18 +28,23 @@ const LINKS = [
 
 export function SiteNav() {
   const pathname = usePathname();
-  const onLanding = pathname === "/";
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/8 bg-bg-dark/90 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+      {/* Ultra-compact mobile chrome — limited phone screen space */}
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-1 px-1.5 py-1 sm:gap-4 sm:px-6 sm:py-3">
         <Link
           href="/"
-          className="group flex min-w-0 items-center gap-2.5 text-white/90 hover:text-neon-cyan transition-colors"
+          className="group flex min-w-0 items-center gap-1 text-white/90 hover:text-neon-cyan transition-colors sm:gap-2.5"
         >
-          <Dna className="h-6 w-6 shrink-0 text-neon-cyan" strokeWidth={1.5} />
-          <div className="min-w-0 leading-tight">
-            <span className="block text-sm font-semibold tracking-tight">BROK</span>
+          <Dna
+            className="h-4 w-4 shrink-0 text-neon-cyan sm:h-6 sm:w-6"
+            strokeWidth={1.5}
+          />
+          <div className="min-w-0 leading-none sm:leading-tight">
+            <span className="block text-[11px] font-semibold tracking-tight sm:text-sm">
+              BROK
+            </span>
             <span className="hidden text-[10px] text-white/40 sm:block">
               {BROK_TAGLINE}
             </span>
@@ -47,9 +52,7 @@ export function SiteNav() {
         </Link>
 
         <nav
-          className={`flex items-center gap-1 sm:gap-2 ${
-            onLanding ? "" : "text-sm"
-          }`}
+          className="flex items-center gap-0 sm:gap-2"
           aria-label="Main"
         >
           {LINKS.map(({ href, label, icon: Icon, custom }) => {
@@ -59,14 +62,15 @@ export function SiteNav() {
               <Link
                 key={href}
                 href={href}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm ${
+                title={label}
+                className={`inline-flex items-center justify-center rounded-md p-1.5 transition-colors sm:gap-1.5 sm:rounded-lg sm:px-3 sm:py-2 sm:text-sm ${
                   active
                     ? "bg-neon-cyan/12 text-neon-cyan border border-neon-cyan/25"
                     : "text-white/55 hover:text-white/90 hover:bg-white/5 border border-transparent"
                 }`}
               >
                 {custom ? (
-                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" size={16} />
+                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" size={14} />
                 ) : (
                   <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 )}
@@ -76,7 +80,7 @@ export function SiteNav() {
           })}
           <Link
             href="/avatar"
-            className={`ml-1 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors sm:px-3 sm:text-sm ${
+            className={`ml-0.5 inline-flex items-center justify-center rounded-md p-1.5 transition-colors sm:ml-1 sm:gap-1.5 sm:rounded-lg sm:px-3 sm:py-2 sm:text-sm ${
               pathname === "/avatar"
                 ? "bg-neon-cyan/12 text-neon-cyan border border-neon-cyan/25"
                 : "text-white/55 hover:text-neon-cyan border border-white/10 hover:border-neon-cyan/30"
@@ -86,12 +90,13 @@ export function SiteNav() {
             <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Avatar</span>
           </Link>
-          <div className="ml-2 hidden border-l border-white/10 pl-3 sm:block">
+          <div className="ml-1 hidden border-l border-white/10 pl-3 sm:ml-2 sm:block">
             <AccountBadge />
           </div>
         </nav>
-        <div className="sm:hidden">
-          <AccountBadge />
+        {/* Mobile: icon-only account chip — full AccountBadge is too tall for the bar */}
+        <div className="shrink-0 sm:hidden">
+          <AccountBadge compactNav />
         </div>
       </div>
     </header>

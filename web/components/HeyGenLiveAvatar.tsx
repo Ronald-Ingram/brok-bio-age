@@ -40,6 +40,8 @@ async function readSpeakResponse(res: Response): Promise<{
 
 export interface HeyGenLiveAvatarHandle {
   speak: (text: string, fullLength?: boolean) => Promise<void>;
+  /** Cut off in-progress lip-sync/speech immediately (user Stop). */
+  stopSpeaking: () => void;
   isConnected: boolean;
 }
 
@@ -149,6 +151,7 @@ export const HeyGenLiveAvatar = forwardRef<
   const connectGenRef = useRef(0);
   const connectingRef = useRef(false);
   const enabledRef = useRef(enabled);
+  const speakAbortRef = useRef(false);
   const onErrorRef = useRef(onError);
   const onStatusRef = useRef(onStatus);
   const softReconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -466,6 +469,7 @@ export const HeyGenLiveAvatar = forwardRef<
 
   const streamPcmToAvatar = useCallback(
     async (ws: WebSocket, pcmChunks: string[]) => {
+      if (speakAbortRef.current) return;
       const speakId = crypto.randomUUID();
       const speakAck = new Promise<void>((resolve, reject) => {
         const timer = setTimeout(
@@ -496,23 +500,56 @@ export const HeyGenLiveAvatar = forwardRef<
       });
 
       for (const audio of pcmChunks) {
+        if (speakAbortRef.current) {
+          try {
+            ws.send(JSON.stringify({ type: "agent.interrupt" }));
+          } catch {
+            /* ignore */
+          }
+          return;
+        }
         ws.send(JSON.stringify({ type: "agent.speak", audio, event_id: speakId }));
       }
+      if (speakAbortRef.current) return;
       ws.send(JSON.stringify({ type: "agent.speak_end", event_id: speakId }));
       await speakAck;
     },
     []
   );
 
+  const stopSpeaking = useCallback(() => {
+    speakAbortRef.current = true;
+    try {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "agent.interrupt" }));
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.muted = true;
+        audioRef.current.volume = 0;
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const speakOnce = useCallback(
     async (text: string, fullLength: boolean) => {
+      if (speakAbortRef.current) return;
       await ensureSession();
+      if (speakAbortRef.current) return;
       const ws = wsRef.current;
       if (!ws || ws.readyState !== WebSocket.OPEN) {
         throw new Error("heygen_ws_not_ready");
       }
 
       await enableRoomAudio();
+      if (speakAbortRef.current) return;
 
       const prepared = normalizeForSpeech(text);
       // Always chunk long answers so mobile + Cartesia stay under limits.
@@ -522,6 +559,7 @@ export const HeyGenLiveAvatar = forwardRef<
           : [prepared];
 
       for (let i = 0; i < segments.length; i++) {
+        if (speakAbortRef.current) return;
         onSpeakProgress?.(i + 1, segments.length);
 
         const res = await fetch("/api/brok/heygen/speak", {
@@ -533,6 +571,7 @@ export const HeyGenLiveAvatar = forwardRef<
             user_id: userId ?? undefined,
           }),
         });
+        if (speakAbortRef.current) return;
         const payload = await readSpeakResponse(res);
         if (!res.ok) {
           throw new Error(
@@ -555,17 +594,32 @@ export const HeyGenLiveAvatar = forwardRef<
   const speak = useCallback(
     async (text: string, fullLength = true) => {
       if (!enabledRef.current) return;
+      speakAbortRef.current = false;
+      // Unmute room audio for a new utterance (Stop may have muted it).
+      try {
+        if (audioRef.current) {
+          audioRef.current.muted = false;
+          forceFullMediaVolume(audioRef.current);
+        }
+      } catch {
+        /* ignore */
+      }
       try {
         try {
           await speakOnce(text, fullLength);
-        } catch {
+        } catch (e) {
+          if (speakAbortRef.current) return;
           // One hard reconnect + retry — common after mobile network blips.
           await stopLocalSession(true);
+          if (speakAbortRef.current || !enabledRef.current) return;
           await startSession();
+          if (speakAbortRef.current) return;
           await speakOnce(text, fullLength);
         }
-        setConnectError(null);
-        setStat("live");
+        if (!speakAbortRef.current) {
+          setConnectError(null);
+          setStat("live");
+        }
       } finally {
         if (!enabledRef.current) {
           await stopLocalSession(true);
@@ -580,9 +634,10 @@ export const HeyGenLiveAvatar = forwardRef<
     ref,
     () => ({
       speak,
+      stopSpeaking,
       isConnected: isLive,
     }),
-    [speak, isLive]
+    [speak, stopSpeaking, isLive]
   );
 
   return (
@@ -634,7 +689,8 @@ export const HeyGenLiveAvatar = forwardRef<
           </p>
           <button
             type="button"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setConnectError(null);
               void startSession();
             }}
