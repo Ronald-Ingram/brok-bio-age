@@ -644,7 +644,8 @@ export function WalletPanel({
                   !amount ||
                   parseInt(amount, 10) < 1 ||
                   parseInt(amount, 10) > spendable ||
-                  (panel === "send" && phone.replace(/\D/g, "").length < 10) ||
+                  // Send: name required; phone optional (BROK code alone is enough for instant credit)
+                  (panel === "send" && recipient.trim().length < 2) ||
                   (panel === "withdraw" && !address.trim())
                 }
                 className="px-6 py-2.5 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-40 transition-colors"
@@ -655,19 +656,21 @@ export function WalletPanel({
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={() => setConfirming(false)}
                   className="px-4 py-2.5 rounded-xl border border-white/15 text-white/55 text-sm hover:border-white/25 transition-colors"
                 >
-                  Cancel
+                  Back
                 </button>
                 <button
                   type="button"
-                  onClick={handleConfirm}
+                  onClick={() => void handleConfirm()}
                   disabled={submitting}
-                  className="px-6 py-2.5 rounded-xl bg-neon-cyan/20 border border-neon-cyan/60 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 transition-colors"
+                  className="px-6 py-2.5 rounded-xl bg-neon-cyan/20 border border-neon-cyan/60 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/30 disabled:opacity-40 transition-colors touch-manipulation"
                 >
                   {submitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : panel === "send" ? (
+                    "Confirm send"
                   ) : (
                     "Confirm"
                   )}
@@ -735,6 +738,13 @@ export function WalletPanel({
                     : ""}{" "}
                   to {giftName.trim()}. Balance updates immediately; then tap
                   Text message to send from your phone.
+                </>
+              ) : panel === "send" ? (
+                <>
+                  You&apos;re sending {amount} $POCK to {recipient.trim() || "recipient"}
+                  {giftRecipientId.trim()
+                    ? ` (${giftRecipientId.trim()})`
+                    : ""}. Balance updates immediately. Phone is optional.
                 </>
               ) : (
                 <>
