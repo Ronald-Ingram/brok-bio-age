@@ -40,6 +40,12 @@ import {
   shouldInjectFounderXFeed,
 } from "@/lib/ronaldIngramX";
 import { wantsDetailedAnswer } from "@/lib/spokenText";
+import {
+  buildBrokTimeContextBlock,
+  wantsTimeAwareness,
+} from "@/lib/brokTimeContext";
+import { markGiftEngaged } from "@/lib/giftOutreach";
+import { getServiceSupabase } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -93,7 +99,14 @@ export async function POST(req: Request) {
     console.error("[brok_chat_threads]", e);
   }
 
-  if (brokApiConfigured()) {
+  // Gift cohort: any chat attempt counts as engagement (stops day-5 circle-back).
+  void markGiftEngaged(getServiceSupabase(), meteredUserId);
+
+  // Time questions need local context injection — skip peer API when clock is required.
+  const needsLocalTime = wantsTimeAwareness(message);
+
+  if (brokApiConfigured() && !needsLocalTime) {
+    const timeContext = buildBrokTimeContextBlock();
     const res = await fetch(`${BROK_API_BASE}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -104,6 +117,8 @@ export async function POST(req: Request) {
         user_id: meteredUserId,
         file_ids: body.file_ids,
         page_context: body.page_context,
+        time_context: timeContext,
+        system_context: timeContext,
       }),
     });
 
@@ -172,6 +187,9 @@ export async function POST(req: Request) {
     );
 
     const parts: string[] = [];
+
+    // Always give BROK a real clock (safe, read-only).
+    parts.push(buildBrokTimeContextBlock());
 
     // Live prices (CoinGecko crypto + Yahoo stocks) when user asks price/ticker/name
     const prices = await buildMarketPricesKnowledgeBlock(message).catch(

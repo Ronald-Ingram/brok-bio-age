@@ -4,6 +4,12 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/cron/gift-outreach?mode=all&email=1",
+      "schedule": "0 14 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/api/stripe/webhook",

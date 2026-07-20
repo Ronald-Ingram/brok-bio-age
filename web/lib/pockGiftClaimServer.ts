@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { onFirstGiftReceive } from "@/lib/giftOutreach";
 import { creditPockFromStripe } from "@/lib/stripePockCredit";
 import { verifyInvite, type PockInvitePayload } from "@/lib/pockInvite";
 
@@ -20,6 +21,8 @@ export interface GiftClaimResult {
   amount: number;
   alreadyClaimed: boolean;
   message: string;
+  /** True only on the account's first invite credit (triggers activation outreach). */
+  firstReceive?: boolean;
 }
 
 export function inviteKeyFromToken(token: string): string {
@@ -86,6 +89,7 @@ export async function claimGiftForUser(
         ok: true,
         amount: payload.amount,
         alreadyClaimed: true,
+        firstReceive: false,
         message: inviteCreditMessage(payload, false),
       };
     }
@@ -108,10 +112,31 @@ export async function claimGiftForUser(
     throw new GiftClaimError(msg, 500);
   }
 
+  // First-receive only: activation email/SMS + in-app notice lifecycle.
+  let firstReceive = false;
+  try {
+    const outreach = await onFirstGiftReceive({
+      supabase,
+      userId,
+      token,
+      payload,
+      alreadyClaimed: false,
+    });
+    firstReceive = outreach.firstReceive;
+  } catch (e) {
+    console.warn(
+      "[gift_claim] outreach failed (credit still ok):",
+      e instanceof Error ? e.message : e
+    );
+  }
+
   return {
     ok: true,
     amount: payload.amount,
     alreadyClaimed: false,
-    message: inviteCreditMessage(payload, true),
+    firstReceive,
+    message: firstReceive
+      ? `${inviteCreditMessage(payload, true)} You're activated — check the welcome note for next steps.`
+      : inviteCreditMessage(payload, true),
   };
 }

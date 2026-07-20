@@ -117,6 +117,9 @@ CONTEXT BLOCKS BELOW (founder feed, canon, memory, facts) — use them to answer
 const DETAILED_ANSWER_HINT = `
 DETAILED MODE (user requested depth): Full structured answer after 1–2 speakable openers. Use founder feed + knowledge for progress; Canon for product rules. Still prefer structure over rambling; stop when the question is answered.`;
 
+const TIME_AWARENESS_HINT = `
+TIME: A CURRENT TIME block may be present. Use it for “what time is it?”, dates, and “today/this week” framing. Convert to the user’s named timezone when given. Do not invent a clock without that block.`;
+
 const CASUAL_BREVITY_HINT = `
 CASUAL MODE: Short, high-value answer. Cap ~150–200 words. One practical next step. End by inviting a specific follow-up if more depth would help. Do not open esoteric rabbit holes.`;
 
@@ -254,6 +257,7 @@ export function buildBrokSystemPrompt(
   const liveProgress = isLiveProgressTopic(message);
 
   let prompt = BROK_CORE;
+  prompt += TIME_AWARENESS_HINT;
   if (opts?.pageContextBlock?.trim()) {
     prompt += PAGE_AWARENESS_HINT;
     prompt += `\n\n${opts.pageContextBlock.trim()}`;

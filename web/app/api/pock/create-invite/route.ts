@@ -173,6 +173,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: debitErr.message }, { status: 500 });
     }
 
+    // Durable invite row (for unclaimed circle-back + contact capture).
+    try {
+      const { recordPockInvite } = await import("@/lib/giftOutreach");
+      await recordPockInvite(getServiceSupabase(), {
+        token,
+        kind: inviteKind,
+        senderId,
+        amount,
+        recipientName,
+        recipientEmail: email || null,
+        recipientPhone: phone || null,
+        expiresAtMs: inviteExpiresAt(72),
+      });
+    } catch (e) {
+      console.warn("record pock invite failed:", e);
+    }
+
     // Instant credit when sender knows the recipient's BROK account id.
     let instantCredit = false;
     if (recipientBrokId) {

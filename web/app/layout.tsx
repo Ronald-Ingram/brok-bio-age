@@ -1,3 +1,4 @@
+import { ActivationNoticeModal } from "@/components/ActivationNoticeModal";
 import { DisclaimerFallbackScript } from "@/components/DisclaimerFallbackScript";
 import { SiteNav } from "@/components/SiteNav";
 import { StylesHealthBanner } from "@/components/StylesHealthBanner";
@@ -40,6 +41,7 @@ export default function RootLayout({
             <SiteNav />
             {children}
             <WalletOnboardingGate />
+            <ActivationNoticeModal />
           </PockProvider>
         </ToastProvider>
       </body>
