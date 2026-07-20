@@ -162,8 +162,10 @@ export function TreasuryBuybackPanel({ adminSession }: TreasuryBuybackPanelProps
           </h2>
           <p className="text-xs text-white/45 mt-1 leading-relaxed">
             {Math.round((data?.policyPct ?? 0.2) * 100)}% of Neobanx gross service revenue accrues
-            for on-chain buybacks. Batches execute automatically when accrued reserve hits the
-            threshold (default ~$100).
+            for on-chain buybacks. Default swap input is{" "}
+            <strong className="text-white/60">USDC → $POCK</strong> via Jupiter. The corp wallet
+            still needs a little <strong className="text-white/60">native SOL (~0.05+)</strong>{" "}
+            for network fees and token-account rent — not as the buy currency.
           </p>
         </div>
         <button
@@ -247,7 +249,9 @@ export function TreasuryBuybackPanel({ adminSession }: TreasuryBuybackPanelProps
                 />
               </label>
               <label className="space-y-1 text-xs">
-                <span className="text-white/40">Swap input asset</span>
+                <span className="text-white/40">
+                  Swap input asset (what pays for $POCK)
+                </span>
                 <select
                   value={inputAsset}
                   onChange={(e) =>
@@ -255,9 +259,12 @@ export function TreasuryBuybackPanel({ adminSession }: TreasuryBuybackPanelProps
                   }
                   className="w-full px-3 py-2 rounded-lg bg-black/40 border border-white/10"
                 >
-                  <option value="usdc">USDC (recommended)</option>
-                  <option value="sol">SOL</option>
+                  <option value="usdc">USDC (primary — recommended)</option>
+                  <option value="sol">SOL (secondary — only if no USDC)</option>
                 </select>
+                <span className="text-[10px] text-white/35 leading-snug block">
+                  Always keep ≥0.05 SOL on the corp wallet for gas even when USDC is selected.
+                </span>
               </label>
               <label className="flex items-center gap-2 text-xs text-white/55 pt-6">
                 <input
