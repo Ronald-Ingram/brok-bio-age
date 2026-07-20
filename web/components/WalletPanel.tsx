@@ -159,9 +159,30 @@ export function WalletPanel({
 
   const spendable = totalSpendablePock(user);
 
+  /** Accept 50000 or 50,000 or "50 000" */
+  const parsePockAmount = (raw: string): number => {
+    const n = parseInt(String(raw).replace(/[,\s_]/g, ""), 10);
+    return Number.isFinite(n) ? n : NaN;
+  };
+
+  /** Why Send is blocked — never includes phone (phone is optional). */
+  const sendBlockReason = (): string | null => {
+    const n = parsePockAmount(amount);
+    if (!Number.isFinite(n) || n < 1) {
+      return "Enter a $POCK amount of at least 1.";
+    }
+    if (n > spendable) {
+      return `Not enough balance — this wallet has ${spendable.toLocaleString()} spendable $POCK (need ${n.toLocaleString()}). Switch account if the full balance is on another code.`;
+    }
+    if (recipient.trim().length < 2 && !giftRecipientId.trim()) {
+      return "Enter recipient name and/or their BROK-XXXXXXXX account code.";
+    }
+    return null;
+  };
+
   const syncUsdFromPock = (pockStr: string) => {
     setAmount(pockStr);
-    const n = parseInt(pockStr, 10);
+    const n = parsePockAmount(pockStr);
     if (Number.isFinite(n) && n > 0) {
       setUsdAmount(balanceUsdValue(n, usdPerPock).toFixed(2));
     }
@@ -178,17 +199,23 @@ export function WalletPanel({
   const handleConfirm = async () => {
     setSubmitting(true);
     setGiftError(null);
-    const n = parseInt(amount, 10);
+    const n = parsePockAmount(amount);
     try {
       if (panel === "send") {
-        if (!recipient.trim() || recipient.trim().length < 2) {
-          setGiftError("Enter the recipient's name.");
+        const block = sendBlockReason();
+        if (block) {
+          setGiftError(block);
           setSubmitting(false);
           return;
         }
+        const name =
+          recipient.trim().length >= 2
+            ? recipient.trim()
+            : giftRecipientId.trim() || "recipient";
         const result = await sendPockInvite({
           amount: n,
-          recipientName: recipient.trim(),
+          recipientName: name,
+          // Phone never required — only used if provided for SMS pre-fill.
           phone: phone.trim() || undefined,
           recipientBrokId: giftRecipientId.trim() || undefined,
         });
@@ -214,7 +241,7 @@ export function WalletPanel({
       const msg = e instanceof Error ? e.message : "action_failed";
       const friendly: Record<string, string> = {
         insufficient_pock: "Not enough $POCK for this transfer.",
-        recipient_name_required: "Enter the recipient's name.",
+        recipient_name_required: "Enter the recipient's name or BROK account code.",
         recipient_not_found:
           "BROK account code not found. Use their exact Genius Wallet code (e.g. BROK-BD66A7B6), or leave blank and share the claim link.",
         cannot_send_to_self: "That account code is this wallet.",
@@ -367,18 +394,30 @@ export function WalletPanel({
             <>
               <h3 className="text-sm font-medium text-white/70">Send $POCK</h3>
               <p className="text-xs text-white/40 leading-relaxed">
-                Same simple flow as Gift: enter a name, create a private link.
-                If they already have BROK and open the link while signed in, the
-                $POCK is added to their existing Genius Wallet. Optional BROK
-                account ID credits them instantly (no link needed).
+                Enter name and/or their{" "}
+                <strong className="text-white/60">BROK-XXXXXXXX</strong> code.
+                Phone is <strong className="text-white/60">not required</strong>.
+                With a valid code, credit is instant.
+              </p>
+              <p className="text-[11px] text-white/45 rounded-lg border border-white/10 bg-black/25 px-3 py-2">
+                Spendable on this wallet:{" "}
+                <strong className="text-neon-cyan tabular-nums">
+                  {spendable.toLocaleString()} $POCK
+                </strong>
+                {spendable < parsePockAmount(amount) && Number.isFinite(parsePockAmount(amount)) ? (
+                  <span className="text-amber-300/90">
+                    {" "}
+                    — amount is higher; use Switch account if your full balance is elsewhere.
+                  </span>
+                ) : null}
               </p>
               <label className="block space-y-1.5">
                 <span className="text-xs text-white/45 uppercase tracking-wide">
-                  Recipient name (required)
+                  Recipient name
                 </span>
                 <input
                   type="text"
-                  placeholder="Friend or family name"
+                  placeholder="e.g. Tony"
                   value={recipient}
                   onChange={(e) => setRecipient(e.target.value)}
                   className="bio-field__control w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none"
@@ -386,19 +425,7 @@ export function WalletPanel({
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs text-white/45 uppercase tracking-wide">
-                  Mobile phone (optional — pre-fills Text message)
-                </span>
-                <input
-                  type="tel"
-                  placeholder="Optional"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="bio-field__control w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none"
-                />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-xs text-white/45 uppercase tracking-wide">
-                  BROK account code (optional — instant credit)
+                  BROK account code (instant credit)
                 </span>
                 <input
                   type="text"
@@ -409,11 +436,65 @@ export function WalletPanel({
                   autoCapitalize="characters"
                   spellCheck={false}
                 />
-                <p className="text-[10px] text-white/35 leading-snug">
-                  Paste their Genius Wallet code exactly (BROK-XXXXXXXX). Instantly
-                  credits their existing wallet when found.
-                </p>
               </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-white/45 uppercase tracking-wide">
+                  $POCK amount
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="50000"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm tabular-nums focus:border-neon-cyan/40 outline-none"
+                />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-xs text-white/35 uppercase tracking-wide">
+                  Mobile phone — optional (not required to send)
+                </span>
+                <input
+                  type="tel"
+                  placeholder="Leave blank — optional only"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="bio-field__control w-full px-4 py-2.5 rounded-lg bg-black/20 border border-white/8 text-sm focus:border-neon-cyan/40 outline-none"
+                  autoComplete="off"
+                />
+              </label>
+
+              {sendBlockReason() && (
+                <p className="text-xs text-amber-200/90 border border-amber-400/25 rounded-lg px-3 py-2 bg-amber-400/10">
+                  {sendBlockReason()}
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => void handleConfirm()}
+                disabled={submitting || Boolean(sendBlockReason())}
+                className="w-full sm:w-auto min-h-[48px] px-8 py-3 rounded-xl bg-neon-cyan/25 border-2 border-neon-cyan/70 text-neon-cyan text-base font-semibold hover:bg-neon-cyan/35 disabled:opacity-40 transition-colors touch-manipulation"
+              >
+                {submitting ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Sending…
+                  </span>
+                ) : (
+                  `Send ${Number.isFinite(parsePockAmount(amount)) ? parsePockAmount(amount).toLocaleString() : ""} $POCK now`
+                )}
+              </button>
+              <p className="text-[10px] text-white/35">
+                One tap sends. No phone needed. Debits this wallet immediately.
+              </p>
+
+              {giftError && (
+                <p className="text-sm text-red-400/90 border border-red-400/20 rounded-lg px-3 py-2 bg-red-400/5">
+                  {giftError}
+                </p>
+              )}
+
               {inviteResult && (
                 <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/5 p-3 space-y-2 text-xs text-white/70">
                   <p className="font-medium text-emerald-400/90">
@@ -623,7 +704,8 @@ export function WalletPanel({
             </>
           )}
 
-          {panel !== "gift" && (
+          {/* Withdraw keeps Review/Confirm; Send has its own one-tap button above */}
+          {panel === "withdraw" && (
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
             <label className="flex-1">
               <span className="text-xs text-white/40 block mb-1.5">Amount</span>
@@ -642,11 +724,9 @@ export function WalletPanel({
                 onClick={() => setConfirming(true)}
                 disabled={
                   !amount ||
-                  parseInt(amount, 10) < 1 ||
-                  parseInt(amount, 10) > spendable ||
-                  // Send: name required; phone optional (BROK code alone is enough for instant credit)
-                  (panel === "send" && recipient.trim().length < 2) ||
-                  (panel === "withdraw" && !address.trim())
+                  parsePockAmount(amount) < 1 ||
+                  parsePockAmount(amount) > spendable ||
+                  !address.trim()
                 }
                 className="px-6 py-2.5 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-40 transition-colors"
               >
@@ -669,8 +749,6 @@ export function WalletPanel({
                 >
                   {submitting ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : panel === "send" ? (
-                    "Confirm send"
                   ) : (
                     "Confirm"
                   )}
@@ -722,29 +800,22 @@ export function WalletPanel({
             </div>
           )}
 
-          {giftError && (panel === "gift" || panel === "send") && (
+          {giftError && panel === "gift" && (
             <p className="text-sm text-red-400/90 border border-red-400/20 rounded-lg px-3 py-2 bg-red-400/5">
               {giftError}
             </p>
           )}
 
-          {confirming && (
+          {confirming && panel !== "send" && (
             <p className="text-xs text-amber-400/80 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
               {panel === "gift" ? (
                 <>
                   You&apos;re gifting {amount} $POCK
                   {usdAmount
-                    ? ` (${formatUsd(parseFloat(usdAmount) || balanceUsdValue(parseInt(amount, 10), usdPerPock))} USD)`
+                    ? ` (${formatUsd(parseFloat(usdAmount) || balanceUsdValue(parsePockAmount(amount), usdPerPock))} USD)`
                     : ""}{" "}
                   to {giftName.trim()}. Balance updates immediately; then tap
                   Text message to send from your phone.
-                </>
-              ) : panel === "send" ? (
-                <>
-                  You&apos;re sending {amount} $POCK to {recipient.trim() || "recipient"}
-                  {giftRecipientId.trim()
-                    ? ` (${giftRecipientId.trim()})`
-                    : ""}. Balance updates immediately. Phone is optional.
                 </>
               ) : (
                 <>
