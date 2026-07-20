@@ -212,14 +212,22 @@ export function WalletPanel({
       resetForm();
     } catch (e) {
       const msg = e instanceof Error ? e.message : "action_failed";
-      if (panel === "gift") {
-        const friendly: Record<string, string> = {
-          insufficient_pock: "Not enough $POCK for this gift.",
-          recipient_name_required: "Enter the recipient's name.",
-          invite_failed: "Could not create gift — try again.",
-          auth_required: "Session expired — refresh the page.",
-        };
-        setGiftError(friendly[msg] ?? "Could not send gift — try again.");
+      const friendly: Record<string, string> = {
+        insufficient_pock: "Not enough $POCK for this transfer.",
+        recipient_name_required: "Enter the recipient's name.",
+        recipient_not_found:
+          "BROK account code not found. Use their exact Genius Wallet code (e.g. BROK-BD66A7B6), or leave blank and share the claim link.",
+        cannot_send_to_self: "That account code is this wallet.",
+        invite_failed: "Could not create transfer — try again.",
+        auth_required: "Session expired — refresh the page.",
+      };
+      if (panel === "gift" || panel === "send") {
+        setGiftError(
+          friendly[msg] ??
+            (panel === "send"
+              ? "Could not send — try again."
+              : "Could not send gift — try again.")
+        );
       }
     } finally {
       setSubmitting(false);
@@ -390,15 +398,21 @@ export function WalletPanel({
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs text-white/45 uppercase tracking-wide">
-                  BROK account ID (optional — instant credit if known)
+                  BROK account code (optional — instant credit)
                 </span>
                 <input
                   type="text"
-                  placeholder="Their BROK-… code / account UUID"
+                  placeholder="e.g. BROK-BD66A7B6"
                   value={giftRecipientId}
                   onChange={(e) => setGiftRecipientId(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none font-mono text-xs"
+                  autoCapitalize="characters"
+                  spellCheck={false}
                 />
+                <p className="text-[10px] text-white/35 leading-snug">
+                  Paste their Genius Wallet code exactly (BROK-XXXXXXXX). Instantly
+                  credits their existing wallet when found.
+                </p>
               </label>
               {inviteResult && (
                 <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/5 p-3 space-y-2 text-xs text-white/70">
@@ -500,14 +514,16 @@ export function WalletPanel({
               </label>
               <label className="block space-y-1.5">
                 <span className="text-xs text-white/45 uppercase tracking-wide">
-                  BROK user ID (optional — instant if known)
+                  BROK account code (optional — instant credit)
                 </span>
                 <input
                   type="text"
-                  placeholder="Recipient UUID (optional)"
+                  placeholder="e.g. BROK-BD66A7B6"
                   value={giftRecipientId}
                   onChange={(e) => setGiftRecipientId(e.target.value)}
                   className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm focus:border-neon-cyan/40 outline-none font-mono text-xs"
+                  autoCapitalize="characters"
+                  spellCheck={false}
                 />
               </label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -703,7 +719,7 @@ export function WalletPanel({
             </div>
           )}
 
-          {giftError && panel === "gift" && (
+          {giftError && (panel === "gift" || panel === "send") && (
             <p className="text-sm text-red-400/90 border border-red-400/20 rounded-lg px-3 py-2 bg-red-400/5">
               {giftError}
             </p>

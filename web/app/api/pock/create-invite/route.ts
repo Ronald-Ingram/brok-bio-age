@@ -12,6 +12,7 @@ import {
 } from "@/lib/pockInvite";
 import { balanceUsdValue, fetchPockMarketQuote } from "@/lib/pockPrice";
 import { claimGiftForUser } from "@/lib/pockGiftClaimServer";
+import { resolveBrokAccountId } from "@/lib/resolveBrokAccountId";
 import { absoluteUrl } from "@/lib/siteConfig";
 import { isTwilioConfigured, sendSms } from "@/lib/twilioSms";
 import { NextResponse } from "next/server";
@@ -81,7 +82,22 @@ export async function POST(req: Request) {
     const senderId = authData.user.id;
     const inviteKind = body.inviteKind === "gift" ? "gift" : "transfer";
     const recipientName = body.recipientName?.trim();
-    const recipientBrokId = body.recipientBrokId?.trim();
+    // Accept full UUID, BROK-BD66A7B6, or compact hex — resolve to real user id.
+    const recipientBrokIdRaw = body.recipientBrokId?.trim() || "";
+    let recipientBrokId: string | undefined;
+    if (recipientBrokIdRaw) {
+      const resolved = await resolveBrokAccountId(recipientBrokIdRaw);
+      if (!resolved) {
+        return NextResponse.json(
+          {
+            error: "recipient_not_found",
+            hint: "Use their BROK-XXXXXXXX account code exactly as shown in Genius Wallet (e.g. BROK-BD66A7B6).",
+          },
+          { status: 404 }
+        );
+      }
+      recipientBrokId = resolved;
+    }
 
     let giftUsdEquivalent: number | undefined;
     let giftQuoteSource: "dexscreener" | "retail_anchor" | undefined;
@@ -118,16 +134,17 @@ export async function POST(req: Request) {
     }
 
     if (recipientBrokId) {
-      const { data: recipient } = await userClient
+      if (recipientBrokId === senderId) {
+        return NextResponse.json({ error: "cannot_send_to_self" }, { status: 400 });
+      }
+      // Confirm row exists (resolve already matched brok_users; re-check for safety).
+      const { data: recipient } = await getServiceSupabase()
         .from("brok_users")
         .select("id")
         .eq("id", recipientBrokId)
         .maybeSingle();
       if (!recipient) {
         return NextResponse.json({ error: "recipient_not_found" }, { status: 404 });
-      }
-      if (recipientBrokId === senderId) {
-        return NextResponse.json({ error: "cannot_send_to_self" }, { status: 400 });
       }
     }
 
