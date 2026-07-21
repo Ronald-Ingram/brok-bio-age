@@ -132,6 +132,13 @@ export async function GET(req: Request) {
   const stripePayments = stripePaymentsRes.data ?? [];
   const userBalances = balancesRes.data ?? [];
 
+  /** Real Stripe Checkout only — exclude invite/vendor/ops rows that reuse stripe_payments. */
+  const isStripeCheckoutSession = (sessionId: string | null | undefined) =>
+    Boolean(sessionId && /^cs_(live|test)_/.test(sessionId));
+  const cardPayments = stripePayments.filter((p) =>
+    isStripeCheckoutSession(p.stripe_session_id as string)
+  );
+
   const totalReservedPock = userBalances
     .filter((u) => u.custody_status === "reserved")
     .reduce((sum, u) => sum + Number(u.pock_balance ?? 0), 0);
@@ -143,11 +150,12 @@ export async function GET(req: Request) {
     (sum, u) => sum + Number(u.on_chain_pock_balance ?? 0),
     0
   );
-  const totalUsdCents = stripePayments.reduce(
+  // Cash collected via Stripe Checkout only (not vendor admin credits with amount_cents).
+  const totalUsdCents = cardPayments.reduce(
     (sum, p) => sum + Number(p.amount_cents ?? 0),
     0
   );
-  const totalPockFromStripe = stripePayments.reduce(
+  const totalPockFromStripe = cardPayments.reduce(
     (sum, p) => sum + Number(p.pock_amount ?? 0),
     0
   );
@@ -323,7 +331,8 @@ export async function GET(req: Request) {
       calcEvents: calcDebits.length,
     },
     treasury: {
-      stripePaymentCount: stripePayments.length,
+      stripePaymentCount: cardPayments.length,
+      /** USD from real Stripe Checkout (cs_live_/cs_test_) only — not vendor/ops credits */
       stripeUsdCollected: Math.round(totalUsdCents) / 100,
       buybackPolicyPct: POCK_BUYBACK_PCT,
       buybackAccruedUsd,
@@ -335,7 +344,7 @@ export async function GET(req: Request) {
       userLedgerPockTotal: totalLedgerPock,
       userReservedPockTotal: totalReservedPock,
       onChainQueuedPock: totalOnChainQueued,
-      recentStripePayments: [...stripePayments]
+      recentStripePayments: [...cardPayments]
         .sort(
           (a, b) =>
             new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
