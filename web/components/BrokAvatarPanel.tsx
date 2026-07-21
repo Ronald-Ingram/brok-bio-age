@@ -17,6 +17,7 @@ import {
   voiceDisplayName,
 } from "@/lib/brokProductLabels";
 import { spokenExcerpt, wantsFullLengthSpeech } from "@/lib/spokenExcerpt";
+import { linkifyText } from "@/lib/linkifyText";
 import { usePock } from "@/context/PockContext";
 import { MAX_ATTACHMENTS } from "@/lib/brokFileIngest";
 import {
@@ -133,6 +134,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   >([]);
   const [error, setError] = useState<string | null>(null);
   // Default Voice OFF — credit-saving; persist preference (user feedback: feel cheated when it re-enables).
+  // Avatar always defaults OFF on each page load (LiveAvatar session/minute cost).
   const [voiceOn, setVoiceOn] = useState(false);
   const [avatarOn, setAvatarOn] = useState(false);
   const [prefsHydrated, setPrefsHydrated] = useState(false);
@@ -142,27 +144,27 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [lastModel, setLastModel] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const speakAbortRef = useRef(false);
+  const avatarIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageRef = useRef(message);
   messageRef.current = message;
 
   const VOICE_PREF_KEY = "brok_voice_on";
   const AVATAR_PREF_KEY = "brok_avatar_on";
+  /** Auto-turn Avatar off after this idle period (no send / speak activity). */
+  const AVATAR_IDLE_OFF_MS = 3 * 60 * 1000;
 
   useEffect(() => {
     try {
       const v = localStorage.getItem(VOICE_PREF_KEY);
-      const a = localStorage.getItem(AVATAR_PREF_KEY);
-      // Voice defaults OFF (saves credits). Only "1" re-enables; missing/legacy → off + persist.
+      // Voice: only "1" re-enables; missing/legacy → off + persist.
       const voiceEnabled = v === "1";
       setVoiceOn(voiceEnabled);
       if (v !== "1" && v !== "0") {
         localStorage.setItem(VOICE_PREF_KEY, "0");
       }
-      const avatarEnabled = a === "1";
-      setAvatarOn(avatarEnabled);
-      if (a !== "1" && a !== "0") {
-        localStorage.setItem(AVATAR_PREF_KEY, "0");
-      }
+      // Avatar: always OFF on load (do not restore "1") — saves LiveAvatar concurrent minutes.
+      setAvatarOn(false);
+      localStorage.setItem(AVATAR_PREF_KEY, "0");
     } catch {
       setVoiceOn(false);
       setAvatarOn(false);
@@ -186,6 +188,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     setAvatarOn((prev) => {
       const value = typeof next === "function" ? next(prev) : next;
       try {
+        // Persist only for this browser session UX; each page load still starts OFF.
         localStorage.setItem(AVATAR_PREF_KEY, value ? "1" : "0");
       } catch {
         /* ignore */
@@ -193,6 +196,47 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       return value;
     });
   }, []);
+
+  /** Reset 3-minute idle timer while Avatar is on; auto-off frees LiveAvatar sessions. */
+  const bumpAvatarActivity = useCallback(() => {
+    if (avatarIdleTimerRef.current) {
+      clearTimeout(avatarIdleTimerRef.current);
+      avatarIdleTimerRef.current = null;
+    }
+    if (!avatarOn) return;
+    avatarIdleTimerRef.current = setTimeout(() => {
+      setAvatarOnPersist(false);
+      speakAbortRef.current = true;
+      try {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current.removeAttribute("src");
+        }
+      } catch {
+        /* ignore */
+      }
+      setVoiceLoading(false);
+      setSpeakProgress(null);
+      setError(
+        "Avatar turned off after 3 minutes idle (saves live-session credits). Toggle Avatar on when you need the face again."
+      );
+    }, AVATAR_IDLE_OFF_MS);
+  }, [avatarOn, setAvatarOnPersist]);
+
+  useEffect(() => {
+    if (avatarOn) {
+      bumpAvatarActivity();
+    } else if (avatarIdleTimerRef.current) {
+      clearTimeout(avatarIdleTimerRef.current);
+      avatarIdleTimerRef.current = null;
+    }
+    return () => {
+      if (avatarIdleTimerRef.current) {
+        clearTimeout(avatarIdleTimerRef.current);
+        avatarIdleTimerRef.current = null;
+      }
+    };
+  }, [avatarOn, bumpAvatarActivity]);
 
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
   /** True when the user used mic (or we should re-arm) for continuous voice dialogue. */
@@ -534,6 +578,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     // Respect Voice off — never auto-speak unless Voice or Avatar is on.
     if (!voiceOn && !avatarOn) return;
     speakAbortRef.current = false;
+    bumpAvatarActivity();
     const payload = speechPayload(text, userMessage);
     if (avatarOn && status?.heygen && heygenRef.current) {
       setVoiceLoading(true);
@@ -541,6 +586,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       try {
         await heygenRef.current.speak(payload.text, true);
         if (!speakAbortRef.current) setError(null);
+        bumpAvatarActivity();
       } catch (e) {
         if (speakAbortRef.current) return;
         const msg = sanitizeBrokAvatarError(
@@ -553,6 +599,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       } finally {
         setVoiceLoading(false);
         setSpeakProgress(null);
+        bumpAvatarActivity();
       }
       return;
     }
@@ -574,7 +621,9 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             "Live Avatar is not configured on this environment yet. Avatar toggle works; connect HeyGen to go live."
           );
         } else {
-          setError(null);
+          setError(
+            "Avatar on — auto-offs after 3 minutes idle. Turn off when not needed to save live-session credits."
+          );
         }
       } else {
         // Turning OFF — always stop speech/credits burn immediately.
@@ -715,6 +764,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     // If mic is live at send, they are in voice dialogue mode.
     if (listening) preferVoiceInputRef.current = true;
     stopListening();
+    bumpAvatarActivity();
     setError(null);
     setLoading(true);
     setResponse("");
@@ -1305,7 +1355,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               </button>
             </div>
             <p className="text-sm sm:text-[15px] text-white/90 whitespace-pre-wrap leading-relaxed sm:max-h-[min(40vh,360px)] sm:overflow-y-auto">
-              {response}
+              {linkifyText(response)}
             </p>
           </div>
         ) : null}
@@ -1339,7 +1389,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
                     {turn.role === "user" ? "You" : "BROK"}
                   </span>
                   <p className="whitespace-pre-wrap leading-relaxed break-words">
-                    {turn.content}
+                    {linkifyText(turn.content)}
                   </p>
                 </div>
               ))

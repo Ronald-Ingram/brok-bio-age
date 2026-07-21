@@ -156,6 +156,11 @@ export const HeyGenLiveAvatar = forwardRef<
   const onStatusRef = useRef(onStatus);
   const softReconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startSessionRef = useRef<() => Promise<void>>(async () => {});
+  /** After provider 403/quota/billing — never soft-reconnect until user toggles Avatar. */
+  const reconnectBlockedRef = useRef(false);
+  /** Soft network reconnects only (not after limit errors). Cap per enable cycle. */
+  const softReconnectCountRef = useRef(0);
+  const MAX_SOFT_RECONNECTS = 2;
   const [isLive, setIsLive] = useState(false);
   const [status, setStatus] = useState<"idle" | "connecting" | "live" | "error">("idle");
   const [connectError, setConnectError] = useState<string | null>(null);
@@ -164,6 +169,20 @@ export const HeyGenLiveAvatar = forwardRef<
   enabledRef.current = enabled;
   onErrorRef.current = onError;
   onStatusRef.current = onStatus;
+
+  const isQuotaLimitError = useCallback((msg: string) => {
+    const lower = msg.toLowerCase();
+    return (
+      lower.includes("403") ||
+      lower.includes("402") ||
+      lower.includes("credit") ||
+      lower.includes("quota") ||
+      lower.includes("billing") ||
+      lower.includes("limit") ||
+      lower.includes("concurrent") ||
+      lower.includes("session limit")
+    );
+  }, []);
 
   const setStat = useCallback((s: typeof status) => {
     setStatus(s);
@@ -207,16 +226,26 @@ export const HeyGenLiveAvatar = forwardRef<
 
   const scheduleSoftReconnect = useCallback(() => {
     if (!enabledRef.current) return;
+    if (reconnectBlockedRef.current) return;
+    if (document.visibilityState === "hidden") return;
+    if (softReconnectCountRef.current >= MAX_SOFT_RECONNECTS) return;
+    softReconnectCountRef.current += 1;
     if (softReconnectTimer.current) clearTimeout(softReconnectTimer.current);
     softReconnectTimer.current = setTimeout(() => {
       if (!enabledRef.current || connectingRef.current) return;
-      // Don't spam parent error UI — quietly reconnect when WS drops (common on mobile).
+      if (reconnectBlockedRef.current) return;
+      if (document.visibilityState === "hidden") return;
+      // Limited soft reconnect for mobile WS blips — not after quota/403.
       void startSessionRef.current();
     }, mobile ? 800 : 400);
   }, [mobile]);
 
   const startSession = useCallback(async () => {
     if (!enabledRef.current || connectingRef.current) return;
+    if (reconnectBlockedRef.current) {
+      setStat("error");
+      return;
+    }
     connectingRef.current = true;
     const gen = ++connectGenRef.current;
     setStat("connecting");
@@ -235,9 +264,11 @@ export const HeyGenLiveAvatar = forwardRef<
         hint?: string;
       };
       if (!res.ok) {
-        throw new Error(
-          sanitizeBrokAvatarError(data.hint ?? data.error ?? "session_failed")
-        );
+        const raw = data.hint ?? data.error ?? "session_failed";
+        if (isQuotaLimitError(raw) || res.status === 402 || res.status === 403) {
+          reconnectBlockedRef.current = true;
+        }
+        throw new Error(sanitizeBrokAvatarError(raw));
       }
       if (gen !== connectGenRef.current) return;
       if (data.isSandbox) {
@@ -280,6 +311,7 @@ export const HeyGenLiveAvatar = forwardRef<
       room.on(RoomEvent.Disconnected, () => {
         if (enabledRef.current && gen === connectGenRef.current) {
           setStat("error");
+          // Only limited soft reconnect — never after quota block.
           scheduleSoftReconnect();
         }
       });
@@ -296,7 +328,6 @@ export const HeyGenLiveAvatar = forwardRef<
       wsRef.current = ws;
       ws.addEventListener("close", () => {
         if (enabledRef.current && gen === connectGenRef.current) {
-          // Mobile Safari often drops idle WS — reconnect quietly instead of alarming.
           setStat("error");
           scheduleSoftReconnect();
         }
@@ -348,9 +379,11 @@ export const HeyGenLiveAvatar = forwardRef<
       }
     } catch (e) {
       if (gen === connectGenRef.current) {
-        const msg = sanitizeBrokAvatarError(
-          e instanceof Error ? e.message : "avatar_connect_failed"
-        );
+        const raw = e instanceof Error ? e.message : "avatar_connect_failed";
+        if (isQuotaLimitError(raw)) {
+          reconnectBlockedRef.current = true;
+        }
+        const msg = sanitizeBrokAvatarError(raw);
         setConnectError(msg);
         setStat("error");
         // Soft errors on mobile — parent can still fall back to voice.
@@ -360,7 +393,14 @@ export const HeyGenLiveAvatar = forwardRef<
     } finally {
       connectingRef.current = false;
     }
-  }, [mobile, sandboxMode, scheduleSoftReconnect, setStat, stopLocalSession]);
+  }, [
+    mobile,
+    sandboxMode,
+    scheduleSoftReconnect,
+    setStat,
+    stopLocalSession,
+    isQuotaLimitError,
+  ]);
 
   startSessionRef.current = startSession;
 
@@ -375,6 +415,11 @@ export const HeyGenLiveAvatar = forwardRef<
 
   const ensureSession = useCallback(async () => {
     if (sessionReady()) return;
+    if (reconnectBlockedRef.current) {
+      throw new Error(
+        sanitizeBrokAvatarError("session limit / quota — toggle Avatar off and on later")
+      );
+    }
 
     if (connectingRef.current) {
       const deadline = Date.now() + (mobile ? 40_000 : 35_000);
@@ -385,9 +430,10 @@ export const HeyGenLiveAvatar = forwardRef<
       if (sessionReady()) return;
     }
 
-    // Up to 3 connect attempts — mobile networks drop the first session often.
+    // At most 2 attempts when user explicitly needs to speak — never loop forever.
     let lastErr: Error | null = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (reconnectBlockedRef.current) break;
       try {
         await stopLocalSession(true);
         await startSession();
@@ -395,11 +441,15 @@ export const HeyGenLiveAvatar = forwardRef<
         lastErr = new Error("heygen_ws_not_ready");
       } catch (e) {
         lastErr = e instanceof Error ? e : new Error("heygen_ws_not_ready");
+        if (isQuotaLimitError(lastErr.message)) {
+          reconnectBlockedRef.current = true;
+          break;
+        }
       }
       await new Promise((r) => setTimeout(r, 400 + attempt * 500));
     }
     throw lastErr ?? new Error("heygen_ws_not_ready");
-  }, [mobile, sessionReady, startSession, stopLocalSession]);
+  }, [mobile, sessionReady, startSession, stopLocalSession, isQuotaLimitError]);
 
   const teardown = useCallback(async () => {
     connectGenRef.current += 1;
@@ -413,18 +463,20 @@ export const HeyGenLiveAvatar = forwardRef<
 
   /**
    * Connect when avatar toggled on; tear down when off.
-   * Mobile: delay connect slightly so toggle gesture settles; primary connect is still
-   * ensureSession() on first speak (user gesture) for better WebRTC success.
+   * User toggling off→on clears quota block so they can retry after buying credits.
    */
   useEffect(() => {
     if (!enabled) {
+      reconnectBlockedRef.current = false;
+      softReconnectCountRef.current = 0;
       void teardown();
       return;
     }
+    softReconnectCountRef.current = 0;
     setConnectError(null);
     const delay = mobile ? 350 : 0;
     const t = setTimeout(() => {
-      void startSession();
+      if (!reconnectBlockedRef.current) void startSession();
     }, delay);
     return () => {
       clearTimeout(t);
@@ -433,34 +485,35 @@ export const HeyGenLiveAvatar = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable connect lifecycle
   }, [enabled, sandboxMode, avatarId, mobile]);
 
-  // Mobile: free LiveAvatar concurrent slots when tab backgrounds (demo nights exhaust plan).
-  // Reconnect only when visible again and session is gone.
+  // Free LiveAvatar concurrent slots when tab backgrounds — do NOT auto-reconnect on show
+  // (avoids burning sessions; speak/ensureSession reconnects when user actually needs face).
   useEffect(() => {
     if (!enabled) return;
     const onVis = () => {
       if (!enabledRef.current) return;
       if (document.visibilityState === "hidden") {
-        // Stop server session so provider quota frees; static image is fine while backgrounded.
+        if (softReconnectTimer.current) {
+          clearTimeout(softReconnectTimer.current);
+          softReconnectTimer.current = null;
+        }
         void stopLocalSession(true);
         setStat("idle");
-        return;
       }
-      if (document.visibilityState !== "visible") return;
-      if (sessionReady()) return;
-      scheduleSoftReconnect();
     };
     const onPageHide = () => {
+      if (softReconnectTimer.current) {
+        clearTimeout(softReconnectTimer.current);
+        softReconnectTimer.current = null;
+      }
       void stopLocalSession(true);
     };
     document.addEventListener("visibilitychange", onVis);
-    window.addEventListener("pageshow", onVis);
     window.addEventListener("pagehide", onPageHide);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("pageshow", onVis);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [enabled, scheduleSoftReconnect, sessionReady, setStat, stopLocalSession]);
+  }, [enabled, setStat, stopLocalSession]);
 
   const enableRoomAudio = useCallback(async () => {
     // Video stays muted (autoplay); LiveKit audio track is on <audio> — boost that.
