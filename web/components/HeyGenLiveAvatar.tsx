@@ -433,22 +433,34 @@ export const HeyGenLiveAvatar = forwardRef<
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable connect lifecycle
   }, [enabled, sandboxMode, avatarId, mobile]);
 
-  // Reconnect when phone wakes / tab returns (iOS Safari freezes WS).
+  // Mobile: free LiveAvatar concurrent slots when tab backgrounds (demo nights exhaust plan).
+  // Reconnect only when visible again and session is gone.
   useEffect(() => {
     if (!enabled) return;
     const onVis = () => {
-      if (document.visibilityState !== "visible") return;
       if (!enabledRef.current) return;
+      if (document.visibilityState === "hidden") {
+        // Stop server session so provider quota frees; static image is fine while backgrounded.
+        void stopLocalSession(true);
+        setStat("idle");
+        return;
+      }
+      if (document.visibilityState !== "visible") return;
       if (sessionReady()) return;
       scheduleSoftReconnect();
     };
+    const onPageHide = () => {
+      void stopLocalSession(true);
+    };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("pageshow", onVis);
+    window.addEventListener("pagehide", onPageHide);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("pageshow", onVis);
+      window.removeEventListener("pagehide", onPageHide);
     };
-  }, [enabled, scheduleSoftReconnect, sessionReady]);
+  }, [enabled, scheduleSoftReconnect, sessionReady, setStat, stopLocalSession]);
 
   const enableRoomAudio = useCallback(async () => {
     // Video stays muted (autoplay); LiveKit audio track is on <audio> — boost that.
@@ -687,12 +699,16 @@ export const HeyGenLiveAvatar = forwardRef<
             Live session paused — static BROK shown
             {connectError ? `: ${connectError}` : ""}
           </p>
+          <p className="text-[9px] text-white/45 leading-snug">
+            Tip: turn Avatar off on other devices/tabs first (frees provider
+            sessions). Voice works without live face.
+          </p>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               setConnectError(null);
-              void startSession();
+              void stopLocalSession(true).then(() => startSession());
             }}
             className="text-[10px] px-2 py-1 rounded border border-neon-cyan/40 text-neon-cyan hover:bg-neon-cyan/10"
           >

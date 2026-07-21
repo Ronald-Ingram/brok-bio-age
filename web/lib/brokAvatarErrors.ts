@@ -7,14 +7,23 @@ const VENDOR_RE =
 export function sanitizeBrokAvatarError(raw: string): string {
   const lower = raw.toLowerCase();
 
+  // LiveAvatar concurrent sessions, plan minutes, or API billing — not $POCK token supply.
   if (
     lower.includes("403") ||
     lower.includes("402") ||
     lower.includes("credit") ||
     lower.includes("quota") ||
-    lower.includes("billing")
+    lower.includes("billing") ||
+    lower.includes("concurrent") ||
+    lower.includes("too many") ||
+    lower.includes("limit") ||
+    lower.includes("rate limit")
   ) {
-    return `${BROK_AVATAR_LABEL} session limit reached — toggle Avatar off or try again later.`;
+    return (
+      `${BROK_AVATAR_LABEL} provider limit (concurrent sessions or plan minutes) — ` +
+      `turn Avatar OFF on all tabs/phones to free slots, wait 1–2 minutes, then toggle on again. ` +
+      `Text and Voice still work. This is not $POCK token supply.`
+    );
   }
 
   if (lower.includes("not_configured") || lower.includes("api_key_missing")) {
