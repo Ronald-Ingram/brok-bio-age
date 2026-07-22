@@ -180,11 +180,18 @@ export async function POST(req: Request) {
     const founderIdentity = isFounderIdentityTopic(message);
     const liveProgress = isLiveProgressTopic(message);
     // Live/progress: X feed first, lighter Canon. Founder identity/values: full Canon first.
-    const { knowledgeBlock, userFactsBlock } = await buildKnowledgeContext(
-      message,
-      meteredUserId,
-      { detailed: detailed || founderIdentity || !liveProgress }
-    );
+    // Never fail the whole chat if Canon/DB retrieval blips.
+    let knowledgeBlock: string | undefined;
+    let userFactsBlock: string | undefined;
+    try {
+      const built = await buildKnowledgeContext(message, meteredUserId, {
+        detailed: detailed || founderIdentity || !liveProgress,
+      });
+      knowledgeBlock = built.knowledgeBlock;
+      userFactsBlock = built.userFactsBlock;
+    } catch (knowErr) {
+      console.warn("[brok_chat] knowledge context failed (continuing):", knowErr);
+    }
 
     const parts: string[] = [];
 

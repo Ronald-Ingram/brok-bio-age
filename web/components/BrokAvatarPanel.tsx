@@ -805,20 +805,50 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       // Newest-first storage: prepend so the top of the list is always latest.
       setChatTurns((prev) => [optimisticUser, ...prev]);
 
-      const res = await fetch("/api/brok/chat", {
-        method: "POST",
-        headers: await brokAuthHeaders(),
-        body: JSON.stringify({
-          message: userMsg,
-          thread_id: threadId,
-          user_id: user?.id,
-          file_ids: uploadedIds.length ? uploadedIds : undefined,
-          file_contexts: contexts.length ? contexts : undefined,
-          page_context: buildPageContextPayload(pathname ?? "/"),
-        }),
+      const chatBody = JSON.stringify({
+        message: userMsg,
+        thread_id: threadId,
+        user_id: user?.id,
+        file_ids: uploadedIds.length ? uploadedIds : undefined,
+        file_contexts: contexts.length ? contexts : undefined,
+        page_context: buildPageContextPayload(pathname ?? "/"),
       });
 
-      const data = (await res.json()) as {
+      // Retry once on network blips (Safari often surfaces these as "Load failed").
+      let res: Response | null = null;
+      let lastNetErr: unknown = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          res = await fetch("/api/brok/chat", {
+            method: "POST",
+            headers: await brokAuthHeaders(),
+            body: chatBody,
+          });
+          lastNetErr = null;
+          break;
+        } catch (netErr) {
+          lastNetErr = netErr;
+          if (attempt === 0) {
+            await new Promise((r) => setTimeout(r, 400));
+            continue;
+          }
+        }
+      }
+      if (!res) {
+        setChatTurns((prev) => prev.filter((t) => t.id !== optimisticUser.id));
+        setMessage(userMsg === "Analyze the attached file." ? "" : userMsg);
+        const raw =
+          lastNetErr instanceof Error ? lastNetErr.message : "network_error";
+        const friendly =
+          /load failed|failed to fetch|networkerror|network request failed/i.test(
+            raw
+          )
+            ? "Network glitch talking to BROK — check connection and send again. (Text chat is up; this is usually a brief drop, not an audit-topic issue.)"
+            : raw;
+        throw new Error(friendly);
+      }
+
+      let data: {
         response?: string;
         thread_id?: string;
         error?: string;
@@ -827,7 +857,18 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         provider?: string;
         used_backup?: boolean;
         groq_model?: string;
-      };
+      } = {};
+      try {
+        data = (await res.json()) as typeof data;
+      } catch {
+        setChatTurns((prev) => prev.filter((t) => t.id !== optimisticUser.id));
+        setMessage(userMsg === "Analyze the attached file." ? "" : userMsg);
+        throw new Error(
+          res.ok
+            ? "BROK returned an empty reply — send again."
+            : `Chat service error (${res.status}). Try again in a moment.`
+        );
+      }
 
       if (!res.ok) {
         setChatTurns((prev) => prev.filter((t) => t.id !== optimisticUser.id));
@@ -857,11 +898,24 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         { id: `user-${ts}`, role: "user", content: userMsg },
         ...prev.filter((t) => t.id !== optimisticUser.id),
       ]);
-      // Speak full answer (waits for audio/avatar); then re-arm empty mic box.
-      await speakResponse(reply, userMsg);
+      // Text is done — never let voice/avatar failures look like chat failure.
+      try {
+        await speakResponse(reply, userMsg);
+      } catch (speakErr) {
+        console.warn("[brok] speak after chat failed:", speakErr);
+        setError(
+          "Answer is ready above. Voice/avatar playback failed — toggle Voice off or try again."
+        );
+      }
       rearmVoiceInput();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Request failed");
+      const raw = e instanceof Error ? e.message : "Request failed";
+      const msg =
+        /load failed|failed to fetch|networkerror/i.test(raw) &&
+        !raw.includes("Network glitch")
+          ? "Network glitch talking to BROK — check connection and send again."
+          : raw;
+      setError(msg);
     } finally {
       setLoading(false);
     }
