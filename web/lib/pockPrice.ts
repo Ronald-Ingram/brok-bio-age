@@ -12,7 +12,15 @@ export const POCK_WHITEPAPER_URL =
   process.env.NEXT_PUBLIC_POCK_WHITEPAPER_URL ??
   "https://neobanx.com/POCK_Litepaper_v1.1_Branded.pdf";
 
-export const POCK_PRICE_REFRESH_MS = 15 * 60 * 1000;
+/**
+ * Client poll interval for Genius Wallet / buy UI.
+ * Server /api/pock/price caches slightly under this (see route) so polls usually hit cache.
+ * Keep ≥5s to avoid hammering DexScreener from every open tab.
+ */
+export const POCK_PRICE_REFRESH_MS = 10_000;
+
+/** Shared server-side quote TTL (ms) — near real-time, not 15-minute delayed. */
+export const POCK_PRICE_SERVER_CACHE_MS = 8_000;
 
 /** Typical Stripe card fee (US) — estimate for disclosure only */
 export const STRIPE_FEE_RATE = 0.029;
@@ -83,19 +91,33 @@ export async function fetchPockMarketQuote(): Promise<PockMarketQuote> {
   try {
     const res = await fetch(
       `https://api.dexscreener.com/latest/dex/tokens/${POCK_SPL_MINT}`,
-      { cache: "no-store" }
+      {
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "Neobanx-BROK-GeniusWallet/1.0",
+        },
+      }
     );
     if (!res.ok) throw new Error("dexscreener_unavailable");
     const data = (await res.json()) as {
-      pairs?: { priceUsd?: string }[];
+      pairs?: {
+        priceUsd?: string;
+        liquidity?: { usd?: number };
+        dexId?: string;
+      }[];
     };
-    const price = parseFloat(data.pairs?.[0]?.priceUsd ?? "");
+    const pairs = [...(data.pairs ?? [])].sort(
+      (a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0)
+    );
+    const price = parseFloat(pairs[0]?.priceUsd ?? "");
     if (!Number.isFinite(price) || price <= 0) throw new Error("no_price");
     return {
       usdPerPock: price,
       source: "dexscreener",
       asOf: now,
-      delayed: true,
+      // Fresh Dex pull — still not a CEX NBBO; copy says near real-time
+      delayed: false,
     };
   } catch {
     return {

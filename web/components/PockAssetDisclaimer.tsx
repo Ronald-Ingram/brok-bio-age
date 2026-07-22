@@ -14,7 +14,8 @@ export function PockAssetDisclaimer({
       className={`text-white/40 leading-relaxed ${compact ? "text-[10px]" : "text-[11px]"} ${className}`}
     >
       $POCK is a digital asset (SEC/CFTC March 17 and April 28, 2026 guidance).
-      Values may fluctuate. Quotes may be delayed — not financial advice.{" "}
+      Values may fluctuate. Quotes track public DEX data (near real-time) — not
+      financial advice.{" "}
       <a href="/trust" className="text-neon-cyan/80 hover:text-neon-cyan underline">
         Trust FAQ
       </a>

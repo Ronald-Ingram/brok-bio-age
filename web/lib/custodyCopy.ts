@@ -10,7 +10,7 @@ export const CUSTODY_MONEY_FLOW_EXPLAINER =
   "Your USD payment settles in Stripe (Neobanx). The $POCK quantity locked at checkout is credited to your Genius Wallet reserve immediately when Stripe confirms card payment — usually within seconds. ACH credits when the bank transfer clears. Spendable in BROK now; on-chain only after you connect a Solana wallet and request release.";
 
 export const CUSTODY_VOLATILITY_NOTE =
-  "Card top-ups use a delayed market quote locked at checkout — not live on-chain price. In volatile markets, buy on Solana for immediate market settlement.";
+  "Card top-ups lock a near real-time market quote at checkout (refreshed every few seconds). For pure live DEX settlement, buy on Solana.";
 
 export const CUSTODY_CONNECT_CTA = "Connect Solana wallet";
 export const CUSTODY_CREATE_WALLET_CTA = "Create wallet for me (coming soon)";

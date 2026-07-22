@@ -188,7 +188,7 @@ export function NeoWalletProductsPanel({
                 <p className="text-xs text-white/45 leading-relaxed">
                   Pay in USD — receive an{" "}
                   <strong className="text-white/65 font-medium">estimated</strong>{" "}
-                  $POCK amount based on the latest delayed market quote.
+                  $POCK amount based on the latest near real-time market quote.
                 </p>
               </>
             )}
@@ -200,7 +200,10 @@ export function NeoWalletProductsPanel({
                   : `Last quote: ${formatUsd(usdPerPock)}/$POCK${quoteAsOf ? ` · ${quoteAsOf}` : ""}`}
               </span>
               {quote?.delayed && (
-                <span className="text-amber-400/80">Delayed feed</span>
+                <span className="text-amber-400/80">Cached quote</span>
+              )}
+              {quote && !quote.delayed && quote.source === "dexscreener" && (
+                <span className="text-neon-cyan/70">Live DEX feed</span>
               )}
             </div>
           </div>

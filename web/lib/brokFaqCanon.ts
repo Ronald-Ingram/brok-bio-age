@@ -61,7 +61,7 @@ export const BROK_FAQ_ITEMS: BrokFaqItem[] = [
     id: "faq_card_vs_solana",
     question: "Should I buy $POCK with a card or on Solana?",
     answer:
-      "Card top-ups lock a delayed market quote at checkout (~15 min feed) and credit reserved $POCK instantly when Stripe confirms — convenient, no wallet needed. On-chain (Phantom, Solflare, Jupiter) gives live market price and immediate self-custody. In volatile markets, on-chain may track price more closely; card is simpler for family testing and gifts.",
+      "Card top-ups lock a near real-time market quote at checkout (DEX feed refreshed every few seconds) and credit reserved $POCK instantly when Stripe confirms — convenient, no wallet needed. On-chain (Phantom, Solflare, Jupiter) gives live market price and immediate self-custody. Card is simpler for family testing and gifts; on-chain for pure market settlement.",
     tags: ["buy", "volatility"],
   },
   {

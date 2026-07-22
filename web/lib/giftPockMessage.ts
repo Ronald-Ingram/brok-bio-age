@@ -10,7 +10,7 @@ export interface GiftShareInput {
   recipientName: string;
   amount: number;
   usdEquivalent?: number | null;
-  /** dexscreener | retail_anchor — matches delayed ticker */
+  /** dexscreener | retail_anchor — matches Genius ticker */
   quoteSource?: "dexscreener" | "retail_anchor" | null;
   giftUrl: string;
   senderName?: string;
@@ -22,7 +22,7 @@ function giftUsdSuffix(
   quoteSource?: GiftShareInput["quoteSource"]
 ): string {
   if (usdEquivalent == null) return "";
-  const kind = quoteSource === "dexscreener" ? "delayed market" : "reference";
+  const kind = quoteSource === "dexscreener" ? "market" : "reference";
   return ` (≈$${usdEquivalent.toFixed(2)} USD, ${kind} quote)`;
 }
 

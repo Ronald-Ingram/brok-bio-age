@@ -65,7 +65,7 @@ export function PockPriceTicker({ user }: PockPriceTickerProps) {
                     spendable
                   </span>
                 )}
-                <span>Updates every 15 min · delayed quote</span>
+                <span>Updates every ~10s · near real-time DEX quote</span>
                 {lastFetch && (
                   <span>Last quote {lastFetch.toLocaleTimeString()}</span>
                 )}

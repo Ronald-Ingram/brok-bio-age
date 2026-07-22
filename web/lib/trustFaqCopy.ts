@@ -30,7 +30,7 @@ export const TRUST_SECTIONS = [
   {
     id: "digital-asset",
     title: "$POCK as a digital asset",
-    body: `$POCK is a digital asset under guidance published by the SEC and CFTC — including the March 17, 2026 digital-asset framework and the April 28, 2026 staff memo. Genius Wallet top-ups and transfers are structured as digital-asset / prepaid-service-credit flows, not bank deposits or money-transmitter remittances. Values can fluctuate; quotes may be delayed. This is not investment advice.`,
+    body: `$POCK is a digital asset under guidance published by the SEC and CFTC — including the March 17, 2026 digital-asset framework and the April 28, 2026 staff memo. Genius Wallet top-ups and transfers are structured as digital-asset / prepaid-service-credit flows, not bank deposits or money-transmitter remittances. Values can fluctuate; Genius quotes track public DEX data near real-time and lock at checkout. This is not investment advice.`,
   },
   {
     id: "pock-stars",

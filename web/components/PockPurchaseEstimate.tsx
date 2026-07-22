@@ -59,8 +59,8 @@ export function PockPurchaseEstimate({
           </span>
         </li>
         <li>
-          Quote: {formatUsd(est.marketUsdPerPock)}/$POCK (delayed · locked when
-          you start checkout)
+          Quote: {formatUsd(est.marketUsdPerPock)}/$POCK (near real-time · locked
+          when you start checkout)
         </li>
         <li>
           Est. Stripe fees: ~{formatUsd(est.estFeesUsd)} — you still receive the
