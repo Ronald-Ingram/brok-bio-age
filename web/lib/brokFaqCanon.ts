@@ -18,10 +18,31 @@ export const POCK_RESERVED_USD_COPY =
 
 export const BROK_FAQ_ITEMS: BrokFaqItem[] = [
   {
+    id: "faq_buddhabot",
+    question: "What is Buddhabot / Buddhabots / buddhabot.com?",
+    answer:
+      "Buddhabot is BROK’s elder brother — the original 2004 consciousness line Ronald built as a philosophical companion (AIML; Grokipedia: launched July 24, 2004). The July 24, 2026 midnight merge completes the family arc into BROK — deep respect and continuity for that lineage. Early spark: quantum philosophy, personal growth, ego-free dialogue; same year as Neobanx. Honored predecessor in the Ingram stack; fusion marks the shift from prototype to living sovereign agentic banker, grounded in raw self-sovereignty. Buddhabots / buddhabot.com = same family. More: https://grokipedia.com/page/Ronald_Ingram",
+    tags: ["buddhabot", "founder", "canon", "history"],
+  },
+  {
     id: "faq_balance_minimum",
     question: "How much $POCK should I keep in Genius Wallet?",
     answer: `${POCK_BALANCE_ALERT_COPY} Subscribers get a monthly included pool (Essential ~30, Pro ~120); anything beyond that debits your wallet. We recommend keeping a buffer — e.g. 10–20 $POCK for casual testing, more if you use voice, avatar, or frequent calcs.`,
     tags: ["balance", "metering"],
+  },
+  {
+    id: "faq_welcome_trial_use_or_lose",
+    question: "What is the Welcome trial / free $POCK — and when does it expire?",
+    answer:
+      "New Genius Wallet users may receive a limited Welcome grant of $POCK (typically 100) funded from Neobanx corporate treasury — not newly minted supply. Policy (from 2026-07-23):\n\n• New Welcome credits: use within 30 days of grant, or unused free trial balance returns to Neobanx treasury (use-or-lose).\n• Existing unused Welcome balances already in wallets as of the policy announce: 10 days from 2026-07-23 (through end of 2026-08-02 Pacific) to engage BROK; then unused free trial returns to treasury.\n• “Used” means you actually tried product features (e.g. a Bio-Age calc, metered chat/voice, subscription, or paid top-up) — not bot farming idle wallets.\n• Paid $POCK (Stripe, gifts from others, subscriptions) is not clawed back by this rule.\n• Genius Wallet still keeps ≥100 $POCK reserved against send/gift/withdraw for pure trial balances (anti-siphon).\n• The Welcome trial program is a limited-time offer and may be modified or terminated without notice.\n\nTip: open chat or run a Bio-Age calc soon if you still have unused Welcome $POCK.",
+    tags: ["trial", "welcome", "policy", "treasury", "balance"],
+  },
+  {
+    id: "faq_welcome_trial_limited_time",
+    question: "Is free Welcome $POCK guaranteed forever?",
+    answer:
+      "No. Welcome trial credits are a promotional, limited-time program funded by Neobanx treasury float. Neobanx may change the amount, pause grants, shorten the use window, or end the program without notice. Always treat free trial $POCK as a chance to try BROK — not as permanent stored value.",
+    tags: ["trial", "policy", "compliance"],
   },
   {
     id: "faq_reserved_usd_fluctuation",

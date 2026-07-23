@@ -37,6 +37,11 @@ export interface BrokUser {
   display_name: string | null;
   pock_balance: number;
   trial_credited: boolean;
+  /** When Welcome trial was granted (if known). */
+  trial_credited_at?: string | null;
+  /** Unused Welcome trial may reclaim after this (use-or-lose). */
+  trial_expires_at?: string | null;
+  trial_reclaimed_at?: string | null;
   subscription_active: boolean;
   subscription_recurring: boolean;
   subscription_tier: SubscriptionTierId | "bio_age" | "pock_og" | null;
