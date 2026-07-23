@@ -1,10 +1,13 @@
 "use client";
 
 import { DevicePinInput } from "@/components/DevicePinInput";
+import { useHideIds } from "@/context/HideIdsContext";
 import { usePock } from "@/context/PockContext";
+import { useToast } from "@/context/ToastContext";
 import {
   displayAccountNumber,
   formatBrokAccountLabel,
+  formatBrokAccountNumber,
   saveMainAccountCode,
 } from "@/lib/pockAccount";
 import { Check, Copy, KeyRound, Loader2, X } from "lucide-react";
@@ -30,6 +33,8 @@ export function AccountIdentity({
     revealLoading,
     setRevealPassword,
   } = usePock();
+  const { hideIds } = useHideIds();
+  const { showToast } = useToast();
 
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"create" | "change">("create");
@@ -60,14 +65,22 @@ export function AccountIdentity({
 
   if (!user) return null;
 
-  const accountLabel = formatBrokAccountLabel(user);
-  const accountDisplay = displayAccountNumber(user.id);
+  const accountLabel = formatBrokAccountLabel(user, hideIds);
+  const accountDisplay = displayAccountNumber(user.id, hideIds);
+  const fullAccountCode = formatBrokAccountNumber(user.id);
   const balance = user.pock_balance ?? 0;
   const lowBalance = balance < LOW_BALANCE_PIN_WARN;
 
   const copyCode = async () => {
+    if (hideIds) {
+      showToast(
+        "IDs are hidden — turn off Hide IDs in the nav to copy your full BROK code.",
+        "warning"
+      );
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(accountDisplay);
+      await navigator.clipboard.writeText(fullAccountCode);
       setCopied(true);
       saveMainAccountCode(user.id);
       window.setTimeout(() => setCopied(false), 2000);
@@ -139,9 +152,13 @@ export function AccountIdentity({
       <button
         type="button"
         onClick={() => void copyCode()}
-        className="inline-flex items-center gap-1 rounded-lg border border-white/15 bg-black/30 px-2 py-1 text-[11px] text-white/70 hover:text-neon-cyan hover:border-neon-cyan/40"
-        title="Copy account code"
-        aria-label="Copy account code"
+        className="inline-flex items-center gap-1 rounded-lg border border-white/15 bg-black/30 px-2 py-1 text-[11px] text-white/70 hover:text-neon-cyan hover:border-neon-cyan/40 disabled:opacity-40"
+        title={
+          hideIds
+            ? "Turn off Hide IDs to copy full account code"
+            : "Copy account code"
+        }
+        aria-label={hideIds ? "Copy blocked while IDs hidden" : "Copy account code"}
       >
         {copied ? (
           <Check className="h-3.5 w-3.5 text-emerald-400" />
@@ -171,9 +188,16 @@ export function AccountIdentity({
         {variant === "card" && (
           <p className="text-[11px] uppercase tracking-wider text-white/40">
             Account code
+            {hideIds ? " · demo mask on" : ""}
           </p>
         )}
         {codeBlock}
+        {hideIds && variant === "card" && (
+          <p className="text-[10px] text-amber-200/70 leading-snug max-w-[20rem] ml-auto text-right">
+            Hide IDs is on — name and code are half-masked for demos. Toggle in the
+            top nav to show full details.
+          </p>
+        )}
         {hasRevealPassword === false && (
           <p
             className={`text-xs text-amber-300/90 leading-snug max-w-[18rem] ${

@@ -3,6 +3,7 @@ import { DisclaimerFallbackScript } from "@/components/DisclaimerFallbackScript"
 import { SiteNav } from "@/components/SiteNav";
 import { StylesHealthBanner } from "@/components/StylesHealthBanner";
 import { WalletOnboardingGate } from "@/components/WalletOnboardingGate";
+import { HideIdsProvider } from "@/context/HideIdsContext";
 import { PockProvider } from "@/context/PockContext";
 import { ToastProvider } from "@/context/ToastContext";
 import { CRITICAL_CSS } from "@/lib/criticalStyles";
@@ -38,10 +39,12 @@ export default function RootLayout({
         <StylesHealthBanner />
         <ToastProvider>
           <PockProvider>
-            <SiteNav />
-            {children}
-            <WalletOnboardingGate />
-            <ActivationNoticeModal />
+            <HideIdsProvider>
+              <SiteNav />
+              {children}
+              <WalletOnboardingGate />
+              <ActivationNoticeModal />
+            </HideIdsProvider>
           </PockProvider>
         </ToastProvider>
       </body>

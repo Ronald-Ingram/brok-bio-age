@@ -3,6 +3,7 @@
 import { AccountBadge } from "@/components/AccountBadge";
 import { EnneagramStarIcon } from "@/components/EnneagramStarIcon";
 import { GeniusWalletIcon } from "@/components/GeniusWalletIcon";
+import { HideIdsToggle } from "@/components/HideIdsToggle";
 import { BROK_TAGLINE } from "@/lib/siteCopy";
 import { Bot, Calculator, Dna, MessageSquare, ShieldCheck } from "lucide-react";
 import Link from "next/link";
@@ -90,12 +91,14 @@ export function SiteNav() {
             <Bot className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">Avatar</span>
           </Link>
-          <div className="ml-1 hidden border-l border-white/10 pl-3 sm:ml-2 sm:block">
+          <div className="ml-1 hidden items-center gap-2 border-l border-white/10 pl-3 sm:ml-2 sm:flex">
+            <HideIdsToggle />
             <AccountBadge />
           </div>
         </nav>
-        {/* Mobile: icon-only account chip — full AccountBadge is too tall for the bar */}
-        <div className="shrink-0 sm:hidden">
+        {/* Mobile: hide-IDs + compact account chip */}
+        <div className="flex shrink-0 items-center gap-1 sm:hidden">
+          <HideIdsToggle compact />
           <AccountBadge compactNav />
         </div>
       </div>

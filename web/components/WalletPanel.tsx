@@ -17,6 +17,8 @@ import {
 } from "@/lib/neoWalletCatalog";
 import { usePock } from "@/context/PockContext";
 import { AccountIdentity } from "@/components/AccountIdentity";
+import { useHideIds } from "@/context/HideIdsContext";
+import { halfMaskBalance } from "@/lib/hideIds";
 import { AccountRestorePanel } from "@/components/AccountRestorePanel";
 import { TransactionHistorySection } from "@/components/TransactionHistorySection";
 import {
@@ -26,7 +28,12 @@ import {
 } from "@/lib/subscriptionConfig";
 import { FREE_TIER_COPY } from "@/lib/freeReport";
 import type { PockInviteResult } from "@/lib/pockService";
-import { totalSpendablePock } from "@/lib/pockService";
+import {
+  externalTransferableFromUser,
+  MIN_GENIUS_RESERVE_POCK,
+  totalSpendablePock,
+} from "@/lib/pockService";
+import { reserveCopy } from "@/lib/pockReserve";
 import { usePockMarketQuote } from "@/hooks/usePockMarketQuote";
 import { balanceUsdValue } from "@/lib/pockPrice";
 import {
@@ -69,6 +76,7 @@ export function WalletPanel({
     sendGiftInvite,
     withdraw,
   } = usePock();
+  const { hideIds } = useHideIds();
 
   const [panel, setPanel] = useState<ActionPanel>(null);
   const [recipient, setRecipient] = useState("");
@@ -158,6 +166,8 @@ export function WalletPanel({
   };
 
   const spendable = totalSpendablePock(user);
+  /** Send / gift / withdraw — always leave 100 $POCK in Genius Wallet */
+  const transferable = externalTransferableFromUser(user);
 
   /** Accept 50000 or 50,000 or "50 000" */
   const parsePockAmount = (raw: string): number => {
@@ -171,8 +181,11 @@ export function WalletPanel({
     if (!Number.isFinite(n) || n < 1) {
       return "Enter a $POCK amount of at least 1.";
     }
-    if (n > spendable) {
-      return `Not enough balance — this wallet has ${spendable.toLocaleString()} spendable $POCK (need ${n.toLocaleString()}). Switch account if the full balance is on another code.`;
+    if (n > transferable) {
+      if (transferable < 1) {
+        return `At least ${MIN_GENIUS_RESERVE_POCK} $POCK stays reserved in Genius Wallet (welcome trial / buffer). Add more $POCK before sending.`;
+      }
+      return `You can send up to ${transferable.toLocaleString()} $POCK (balance keeps ≥${MIN_GENIUS_RESERVE_POCK} reserved).`;
     }
     if (recipient.trim().length < 2 && !giftRecipientId.trim()) {
       return "Enter recipient name and/or their BROK-XXXXXXXX account code.";
@@ -241,6 +254,9 @@ export function WalletPanel({
       const msg = e instanceof Error ? e.message : "action_failed";
       const friendly: Record<string, string> = {
         insufficient_pock: "Not enough $POCK for this transfer.",
+        min_reserve_required: `Genius Wallet keeps at least ${MIN_GENIUS_RESERVE_POCK} $POCK reserved. Enter a smaller amount.`,
+        transfers_disabled:
+          "Sends and gifts are temporarily paused. Your balance is safe.",
         recipient_name_required: "Enter the recipient's name or BROK account code.",
         recipient_not_found:
           "BROK account code not found. Use their exact Genius Wallet code (e.g. BROK-BD66A7B6), or leave blank and share the claim link.",
@@ -297,7 +313,9 @@ export function WalletPanel({
               {balanceLabel}
             </p>
             <p className="text-5xl font-semibold tabular-nums text-neon-cyan">
-              {user.pock_balance}
+              {hideIds
+                ? halfMaskBalance(user.pock_balance ?? 0)
+                : user.pock_balance}
               <span className="text-2xl text-white/40 ml-2">$POCK</span>
             </p>
             {(user.subscription_active || user.subscription_tier === "pock_og") && (
@@ -400,17 +418,19 @@ export function WalletPanel({
                 With a valid code, credit is instant.
               </p>
               <p className="text-[11px] text-white/45 rounded-lg border border-white/10 bg-black/25 px-3 py-2">
-                Spendable on this wallet:{" "}
+                Transferable (keeps {MIN_GENIUS_RESERVE_POCK} reserved):{" "}
                 <strong className="text-neon-cyan tabular-nums">
-                  {spendable.toLocaleString()} $POCK
+                  {transferable.toLocaleString()} $POCK
                 </strong>
-                {spendable < parsePockAmount(amount) && Number.isFinite(parsePockAmount(amount)) ? (
+                {transferable < parsePockAmount(amount) &&
+                Number.isFinite(parsePockAmount(amount)) ? (
                   <span className="text-amber-300/90">
                     {" "}
-                    — amount is higher; use Switch account if your full balance is elsewhere.
+                    — amount too high for reserve rule (or switch account).
                   </span>
                 ) : null}
               </p>
+              <p className="text-[11px] text-white/35">{reserveCopy()}</p>
               <label className="block space-y-1.5">
                 <span className="text-xs text-white/45 uppercase tracking-wide">
                   Recipient name
@@ -537,8 +557,15 @@ export function WalletPanel({
               <p className="text-xs text-white/40 leading-relaxed">
                 SPL transfer from Neobanx treasury — usually confirms within a
                 minute. Requires a linked Solana wallet on your account
-                (Custody section). Specify amount below; recipient can be any
-                valid Solana address.
+                (Custody section). Type the amount to withdraw (no Max empty) —
+                at least {MIN_GENIUS_RESERVE_POCK} $POCK stays in Genius Wallet.
+              </p>
+              <p className="text-[11px] text-white/35 leading-relaxed">
+                {reserveCopy()} Transferable now:{" "}
+                <span className="text-white/55 tabular-nums">
+                  {transferable.toLocaleString()} $POCK
+                </span>
+                .
               </p>
               {user.custody_status === "reserved" && (
                 <p className="text-xs text-amber-300/90 border border-amber-400/20 rounded-lg px-3 py-2 bg-amber-400/5">
@@ -615,7 +642,7 @@ export function WalletPanel({
                   <input
                     type="number"
                     min={1}
-                    max={spendable}
+                    max={Math.max(1, transferable)}
                     value={amount}
                     onChange={(e) => syncUsdFromPock(e.target.value)}
                     className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm tabular-nums focus:border-neon-cyan/40 outline-none"
@@ -637,8 +664,10 @@ export function WalletPanel({
               </div>
               <p className="text-[11px] text-white/35">
                 Delayed {quoteLabel} quote{" "}
-                {quoteLoading ? "…" : formatUsd(usdPerPock)}/$POCK · spendable
-                balance {spendable} $POCK
+                {quoteLoading ? "…" : formatUsd(usdPerPock)}/$POCK · transferable
+                (keeps {MIN_GENIUS_RESERVE_POCK} reserved){" "}
+                {transferable.toLocaleString()} $POCK · product spendable{" "}
+                {spendable.toLocaleString()}
               </p>
               <DigitalAssetDisclaimer compact />
               {inviteResult?.inviteKind === "gift" && (
@@ -708,13 +737,16 @@ export function WalletPanel({
           {panel === "withdraw" && (
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
             <label className="flex-1">
-              <span className="text-xs text-white/40 block mb-1.5">Amount</span>
+              <span className="text-xs text-white/40 block mb-1.5">
+                Amount (type exact $POCK — no Max empty)
+              </span>
               <input
                 type="number"
                 min={1}
-                max={spendable}
+                max={Math.max(1, transferable)}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
+                placeholder={`1–${transferable || 0}`}
                 className="w-full px-4 py-2.5 rounded-lg bg-black/30 border border-white/10 text-sm tabular-nums focus:border-neon-cyan/40 outline-none"
               />
             </label>
@@ -725,7 +757,8 @@ export function WalletPanel({
                 disabled={
                   !amount ||
                   parsePockAmount(amount) < 1 ||
-                  parsePockAmount(amount) > spendable ||
+                  parsePockAmount(amount) > transferable ||
+                  transferable < 1 ||
                   !address.trim()
                 }
                 className="px-6 py-2.5 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-40 transition-colors"
@@ -767,7 +800,8 @@ export function WalletPanel({
                   disabled={
                     !amount ||
                     parseInt(amount, 10) < 1 ||
-                    parseInt(amount, 10) > spendable ||
+                    parseInt(amount, 10) > transferable ||
+                    transferable < 1 ||
                     giftName.trim().length < 2
                   }
                   className="px-6 py-2.5 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-40 transition-colors"

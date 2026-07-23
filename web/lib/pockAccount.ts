@@ -1,3 +1,4 @@
+import { halfMaskAccountCode, halfMaskName } from "./hideIds";
 import type { BrokUser } from "./pockTypes";
 
 const MASK_CHAR = "•";
@@ -12,24 +13,44 @@ export function maskUserId(userId: string): string {
   return `${MASK_CHAR.repeat(4)}-${MASK_CHAR.repeat(4)}-${MASK_CHAR.repeat(4)}-${MASK_CHAR.repeat(4)}-${MASK_CHAR.repeat(8)}${last4}`;
 }
 
+/** Full body mask except last 4 of UUID compact (legacy). */
 export function maskAccountNumber(userId: string): string {
   const last4 = userId.replace(/-/g, "").slice(-4).toUpperCase();
   return `BROK-${MASK_CHAR.repeat(4)}${last4}`;
+}
+
+/**
+ * Demo-friendly partial mask: BROK-AB••••GH (prefix + edges).
+ * Prefer this when Hide IDs is on.
+ */
+export function halfMaskBrokAccountNumber(userId: string): string {
+  return halfMaskAccountCode(formatBrokAccountNumber(userId));
 }
 
 export function displayUserId(userId: string, revealed: boolean): string {
   return revealed ? userId : maskUserId(userId);
 }
 
-/** Account code is always visible — needed to link devices. Not a secret. */
-export function displayAccountNumber(userId: string, _revealed?: boolean): string {
-  return formatBrokAccountNumber(userId);
+/**
+ * Account code for UI.
+ * @param hideIds — when true, half-mask for demos/ambassadors (still shows format).
+ * Full code remains available via copy only when hideIds is false.
+ */
+export function displayAccountNumber(
+  userId: string,
+  hideIds: boolean = false
+): string {
+  const full = formatBrokAccountNumber(userId);
+  return hideIds ? halfMaskAccountCode(full) : full;
 }
 
-export function formatBrokAccountLabel(user: BrokUser): string {
+export function formatBrokAccountLabel(
+  user: BrokUser,
+  hideIds: boolean = false
+): string {
   const name = user.display_name?.trim();
-  if (name) return name;
-  return "BROK Member";
+  if (!name) return hideIds ? "BROK ••••••" : "BROK Member";
+  return hideIds ? halfMaskName(name) : name;
 }
 
 export function shortUserId(userId: string): string {

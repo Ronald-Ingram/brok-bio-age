@@ -11,10 +11,12 @@ import {
   type KnownAccount,
 } from "@/lib/knownAccounts";
 import {
+  displayAccountNumber,
   formatBrokAccountNumber,
   loadMainAccountCode,
   saveMainAccountCode,
 } from "@/lib/pockAccount";
+import { useHideIds } from "@/context/HideIdsContext";
 import { getSupabase } from "@/lib/supabase/client";
 import {
   Check,
@@ -54,7 +56,11 @@ export function AccountRestorePanel({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const { hideIds } = useHideIds();
   const thisCode = user ? formatBrokAccountNumber(user.id) : null;
+  const thisCodeDisplay = user
+    ? displayAccountNumber(user.id, hideIds)
+    : null;
   const thisBalance = user?.pock_balance ?? 0;
 
   const reloadKnown = useCallback(() => {
@@ -176,7 +182,7 @@ export function AccountRestorePanel({
           {thisCode && (
             <p className="text-sm sm:text-base font-mono text-white/90 pt-1 tracking-wider font-semibold">
               Now open:{" "}
-              <span className="text-neon-cyan">{thisCode}</span>
+              <span className="text-neon-cyan">{thisCodeDisplay ?? thisCode}</span>
               <span className="text-white/45 font-sans font-normal text-xs sm:text-sm ml-2">
                 · {thisBalance.toLocaleString()} $POCK
               </span>
@@ -230,7 +236,7 @@ export function AccountRestorePanel({
                 <ul className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-xl border border-white/15 bg-bg-card shadow-xl py-1">
                   {thisCode && (
                     <li className="px-3 py-2 text-[11px] uppercase tracking-wider text-white/35 border-b border-white/10">
-                      Current · {thisCode}
+                      Current · {thisCodeDisplay ?? thisCode}
                     </li>
                   )}
                   {otherKnown.length === 0 && (
