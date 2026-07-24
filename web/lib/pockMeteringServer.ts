@@ -138,6 +138,38 @@ export async function debitIemReport(userId: string): Promise<MeterDebitResult> 
   };
 }
 
+/** Internally prepared financial statements + Excel — premium Groq usage. */
+export async function debitFinancialsReport(
+  userId: string
+): Promise<MeterDebitResult> {
+  const cost = METER_RATES.baseTurnPock * 4;
+  const supabase = getServiceSupabase();
+  const { data, error } = await supabase.rpc("debit_pock_for_user", {
+    p_user_id: userId,
+    p_amount: cost,
+    p_kind: "meter_debit",
+    p_note: "Financial statements package",
+  });
+
+  if (error) {
+    if (error.message?.includes("insufficient_pock")) {
+      throw new PockMeterError(
+        "insufficient_pock",
+        `Financials packages cost ${cost} $POCK. Top up in Genius Wallet.`,
+        402
+      );
+    }
+    throw new PockMeterError("meter_debit_failed", error.message, 500);
+  }
+
+  const row = data as Record<string, unknown>;
+  return {
+    meter_cost: cost,
+    balance: Number(row.balance ?? 0),
+    included_remaining: Number(row.included_remaining ?? 0),
+  };
+}
+
 export async function assertChatRateLimit(userId: string): Promise<void> {
   const maxPerHour = Number(process.env.BROK_CHAT_MAX_PER_HOUR ?? "90");
   const supabase = getServiceSupabase();

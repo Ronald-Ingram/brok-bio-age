@@ -76,8 +76,8 @@ function SubscribeContent() {
         <p className="font-medium text-white/55">Active usage metering only</p>
         <p>
           Base turn {METER_RATES.baseTurnPock} $POCK · voice +{METER_RATES.voiceBlockPock}{" "}
-          · avatar +{METER_RATES.avatarBlockPock} per spoken block · Grok +30%.
-          Billed while speaking or animating — static mode is free.
+          · avatar +{METER_RATES.avatarBlockPock} per spoken block · BROK Genius
+          path +30%. Billed while speaking or animating — static mode is free.
         </p>
         <p>Bio-Age calculations: {METER_RATES.calcPock} $POCK each (included pool first).</p>
       </section>

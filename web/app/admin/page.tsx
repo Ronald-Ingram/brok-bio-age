@@ -77,6 +77,11 @@ interface DashboardData {
     corpFloat: number | null;
     corpAllocated?: number | null;
     corpWallet?: string;
+    corpOnChainPock?: number | null;
+    corpOnChainSol?: number | null;
+    corpOnChainUsdc?: number | null;
+    corpOnChainAsOf?: string | null;
+    corpOnChainError?: string | null;
     stripeTopUps: number;
     meterUsageEvents: number;
     calcEvents: number;
@@ -88,6 +93,11 @@ interface DashboardData {
     userLedgerPockTotal: number;
     userReservedPockTotal: number;
     onChainQueuedPock: number;
+    corpOnChainPock?: number | null;
+    corpOnChainSol?: number | null;
+    corpOnChainUsdc?: number | null;
+    corpOnChainAsOf?: string | null;
+    corpOnChainError?: string | null;
     recentStripePayments: {
       sessionId: string;
       userId: string;
@@ -228,11 +238,19 @@ export default function AdminPage() {
             />
             <StatCard
               icon={Coins}
-              label="Corp float"
+              label="Corp on-chain $POCK"
               value={
-                data.pock.corpFloat != null
-                  ? `${data.pock.corpFloat.toLocaleString()} $POCK`
-                  : "—"
+                data.pock.corpOnChainPock != null
+                  ? `${data.pock.corpOnChainPock.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })} · float ${
+                      data.pock.corpFloat != null
+                        ? data.pock.corpFloat.toLocaleString()
+                        : "—"
+                    }`
+                  : data.pock.corpFloat != null
+                    ? `float ${data.pock.corpFloat.toLocaleString()}`
+                    : "—"
               }
             />
             <StatCard
@@ -471,10 +489,56 @@ export default function AdminPage() {
             <p className="text-xs text-white/45 leading-relaxed">
               USD from Stripe top-ups lands in your Neobanx Stripe balance. Matching
               $POCK is issued as <strong className="text-white/65">reserved ledger</strong>{" "}
-              credits in Supabase — separate from corp trial float (
-              {data.pock.corpWallet?.slice(0, 8)}…).
+              credits in Supabase — separate from corp trial float and from{" "}
+              <strong className="text-white/65">on-chain corp treasury</strong> (
+              {data.pock.corpWallet?.slice(0, 8)}…). Vesting claims, buybacks, and
+              custody releases move the on-chain line only.
             </p>
             <div className="grid gap-2 sm:grid-cols-2 text-xs">
+              <p className="rounded-lg border border-neon-cyan/30 bg-neon-cyan/10 px-3 py-2 sm:col-span-2">
+                <span className="text-white/40 block">
+                  On-chain corp treasury ({data.pock.corpWallet?.slice(0, 8)}…)
+                </span>
+                {data.treasury.corpOnChainPock != null ? (
+                  <>
+                    <span className="text-neon-cyan font-semibold tabular-nums text-sm">
+                      {data.treasury.corpOnChainPock.toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      $POCK
+                    </span>
+                    <span className="text-white/45 block mt-1 tabular-nums">
+                      {data.treasury.corpOnChainSol != null && (
+                        <>
+                          {data.treasury.corpOnChainSol.toFixed(4)} SOL
+                        </>
+                      )}
+                      {data.treasury.corpOnChainUsdc != null && (
+                        <>
+                          {" "}
+                          · {data.treasury.corpOnChainUsdc.toLocaleString(undefined, {
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          USDC
+                        </>
+                      )}
+                      {data.treasury.corpOnChainAsOf && (
+                        <span className="text-white/30">
+                          {" "}
+                          · as of{" "}
+                          {new Date(data.treasury.corpOnChainAsOf).toLocaleString()}
+                        </span>
+                      )}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-amber-200/80">
+                    {data.treasury.corpOnChainError
+                      ? `Unavailable: ${data.treasury.corpOnChainError}`
+                      : "—"}
+                  </span>
+                )}
+              </p>
               <p className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
                 <span className="text-white/40 block">Stripe USD collected</span>
                 <span className="text-neon-cyan font-semibold tabular-nums">

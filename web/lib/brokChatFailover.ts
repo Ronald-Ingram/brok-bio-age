@@ -2,12 +2,12 @@
  * Multi-provider BROK chat failover.
  *
  * Default chain:
- *   1. Groq 70B (llama-3.3-70b-versatile) for product / Canon / IEM / bio-age
+ *   1. Groq openai/gpt-oss-120b for product / Canon / IEM / bio-age
  *   2. xAI Grok on capacity failure
  *
  * Topic override (markets / crypto / regs / deep investments / Ronald bio validation):
  *   1. xAI Grok first
- *   2. Groq 70B fallback
+ *   2. Groq GPT-OSS 120B fallback
  *
  * User-facing labels stay Neobanx product names — never expose vendor in UI copy.
  */
@@ -81,16 +81,22 @@ function env(name: string): string {
 }
 
 /** Configured backup peers in failover order. */
-export function listBackupPeers(): Peer[] {
+export function listBackupPeers(opts?: {
+  /** Paid subscriber / payment received → premium xAI model (default grok-4.5). */
+  paidAccess?: boolean;
+}): Peer[] {
   const peers: Peer[] = [];
 
   const xaiKey = env("XAI_API_KEY");
   if (xaiKey) {
+    const premium =
+      env("XAI_PREMIUM_MODEL") || env("XAI_MODEL_PREMIUM") || "grok-4.5";
+    const standard = env("XAI_MODEL") || "grok-3";
     peers.push({
       id: "xai",
       baseUrl: env("XAI_BASE_URL") || "https://api.x.ai/v1",
       apiKey: xaiKey,
-      model: env("XAI_MODEL") || "grok-3",
+      model: opts?.paidAccess ? premium : standard,
       auth: true,
     });
   }
@@ -197,7 +203,7 @@ export function chatFailoverSummary(): {
     backups,
     chain,
     topicOverride:
-      "markets/crypto/regs/investments/Ronald-bio → xai:grok first, then groq 70B",
+      "markets/crypto/regs/investments/Ronald-bio → xai:grok first, then groq gpt-oss-120b",
   };
 }
 
@@ -283,6 +289,8 @@ export async function chatWithFailover(
     userFactsBlock?: string;
     history?: ThreadMessage[];
     model?: string;
+    /** Paid / payment-received users get premium xAI (grok-4.5) and Grok-first routing. */
+    paidAccess?: boolean;
   }
 ): Promise<BrokChatResult> {
   const sid = sessionId ?? crypto.randomUUID();
@@ -309,18 +317,25 @@ export async function chatWithFailover(
     userFactsBlock: opts?.userFactsBlock,
   };
 
-  const peers = listBackupPeers();
+  const paidAccess = Boolean(opts?.paidAccess);
+  const peers = listBackupPeers({ paidAccess });
   const xaiPeer = peers.find((p) => p.id === "xai");
+  // Allow runtime model override (tests / admin)
+  if (xaiPeer && opts?.model?.trim()) {
+    xaiPeer.model = opts.model.trim();
+  }
   const otherPeers = peers.filter((p) => p.id !== "xai");
 
-  // Default to most advanced configured model (Grok/xAI) when available.
-  // Groq 70B is capacity/cost fallback and still fine for pure product Q&A.
-  // Force Grok-first for markets / $POCK progress / crypto / investments / Ronald bio.
+  // Paid users: prefer premium xAI first for quality.
+  // Free path: Grok-first only for markets / bio / when BROK_GROK_DEFAULT not false.
+  // Groq remains capacity / product fallback.
   const topicWantsGrok =
     prefersGrokPrimary(message) || isRonaldIngramBioTopic(message);
   const grokDefault =
     process.env.BROK_GROK_DEFAULT?.trim().toLowerCase() !== "false";
-  const grokFirst = Boolean(xaiPeer) && (grokDefault || topicWantsGrok);
+  const grokFirst =
+    Boolean(xaiPeer) &&
+    (paidAccess || grokDefault || topicWantsGrok);
 
   const runXai = async (
     peer: Peer,
@@ -366,7 +381,7 @@ export async function chatWithFailover(
     }
   }
 
-  // Default / after Grok-first miss: Groq 70B
+  // Default / after Grok-first miss: Groq GPT-OSS 120B
   if (groqChatConfigured()) {
     try {
       const result = await chatViaGroq(
@@ -390,7 +405,7 @@ export async function chatWithFailover(
           throw e;
         }
         console.warn(
-          "[brok_chat_failover] groq 70B failed, trying backups:",
+          "[brok_chat_failover] groq gpt-oss-120b failed, trying backups:",
           e.code,
           e.message.slice(0, 160)
         );

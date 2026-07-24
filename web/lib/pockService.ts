@@ -8,6 +8,10 @@ import type {
   PockLedgerEntry,
 } from "./pockTypes";
 import { MAX_OG_HISTORY } from "./ogEntitlementsConfig";
+import {
+  externalTransferablePock,
+  MIN_GENIUS_RESERVE_POCK,
+} from "./pockReserve";
 import { METER_RATES } from "./subscriptionConfig";
 
 export const MAX_FREE_HISTORY = 2;
@@ -129,7 +133,12 @@ export async function bootstrapUser(): Promise<{
   const before = await fetchCurrentUser();
 
   const { data, error } = await supabase.rpc("bootstrap_user");
-  if (error) throw error;
+  if (error) {
+    if (error.message?.includes("account_frozen")) {
+      throw new Error("account_frozen");
+    }
+    throw error;
+  }
   const user = mapUser(data as Record<string, unknown>);
   const credited = !before?.trial_credited && user.trial_credited;
   return { user, credited };
@@ -357,6 +366,17 @@ export function totalSpendablePock(user: BrokUser | null): number {
   }
   return user.pock_balance + included;
 }
+
+/**
+ * Max $POCK that can leave Genius Wallet (send / gift / on-chain withdraw).
+ * Always leaves MIN_GENIUS_RESERVE_POCK (100) in reserved balance.
+ */
+export function externalTransferableFromUser(user: BrokUser | null): number {
+  if (!user) return 0;
+  return externalTransferablePock(user.pock_balance);
+}
+
+export { MIN_GENIUS_RESERVE_POCK, externalTransferablePock };
 
 export function canAffordCalc(user: BrokUser | null): boolean {
   return totalSpendablePock(user) >= METER_RATES.calcPock;

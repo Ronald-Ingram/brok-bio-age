@@ -86,6 +86,88 @@ export function balanceUsdValue(
   return Math.round(pockBalance * usdPerPock * 100) / 100;
 }
 
+/** True when the user asks $POCK price, USD value, or convert $POCK ↔ USD. */
+export function wantsPockUsdConversion(message: string): boolean {
+  const m = message.trim();
+  if (!m) return false;
+  const hasPock = /\$?\bpock\b/i.test(m);
+  if (!hasPock && !/\b(spock)\b/i.test(m)) return false;
+  return /\b(price|worth|value|convert|conversion|how\s+much|in\s*usd|to\s*usd|usd|dollars?|exchange|rate|quote|equals?|equivalent|\d[\d,.]*)\b/i.test(
+    m
+  );
+}
+
+/**
+ * Knowledge block for BROK chat — live Dex quote + conversion math.
+ * Prefer this over generic CoinGecko for $POCK.
+ */
+export async function buildPockPriceKnowledgeBlock(
+  message: string
+): Promise<string | null> {
+  if (!wantsPockUsdConversion(message)) return null;
+  try {
+    const quote = await fetchPockMarketQuote();
+    const rate = quote.usdPerPock;
+    // Extract a numeric amount if present (e.g. "5000 $POCK" or "$50 of POCK")
+    const pockAmt =
+      message.match(
+        /([\d,]+(?:\.\d+)?)\s*(?:\$?\s*)?pock\b/i
+      )?.[1] ??
+      message.match(
+        /\$?\s*pock\s*(?:of|×|x|times)?\s*([\d,]+(?:\.\d+)?)/i
+      )?.[1];
+    const usdAmt =
+      message.match(
+        /\$\s*([\d,]+(?:\.\d+)?)\b/
+      )?.[1] ??
+      message.match(
+        /([\d,]+(?:\.\d+)?)\s*(?:usd|dollars?)\b/i
+      )?.[1];
+
+    const examples: string[] = [];
+    if (pockAmt) {
+      const n = Number(pockAmt.replace(/,/g, ""));
+      if (Number.isFinite(n) && n >= 0) {
+        const usd = Math.round(n * rate * 100) / 100;
+        examples.push(
+          `Example from user: ${n.toLocaleString()} $POCK ≈ $${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD`
+        );
+      }
+    }
+    if (usdAmt) {
+      const n = Number(usdAmt.replace(/,/g, ""));
+      if (Number.isFinite(n) && n > 0 && rate > 0) {
+        const pock = n / rate;
+        examples.push(
+          `Example from user: $${n.toLocaleString()} USD ≈ ${pock.toLocaleString(undefined, { maximumFractionDigits: 4 })} $POCK`
+        );
+      }
+    }
+    // Always give standard anchors
+    for (const n of [100, 1000, 10000]) {
+      const usd = Math.round(n * rate * 100) / 100;
+      examples.push(
+        `${n.toLocaleString()} $POCK ≈ $${usd.toLocaleString(undefined, { maximumFractionDigits: 2 })} USD`
+      );
+    }
+
+    return `LIVE $POCK / USD QUOTE (Genius Wallet source — use these numbers):
+• Spot: $${rate} USD per 1 $POCK
+• Source class: ${quote.source === "dexscreener" ? "live market (DEX)" : "reference anchor"}
+• As of: ${quote.asOf}
+• Conversion: USD = $POCK × rate; $POCK = USD / rate
+${examples.map((e) => `• ${e}`).join("\n")}
+
+RESPONSE RULES:
+- Answer conversion questions with the live rate and the math (show both $POCK and USD).
+- Say estimates can move with the market; not a dollar deposit; not financial advice / DYOR.
+- Do NOT name DexScreener, CoinGecko, or other vendors. Point users to Genius Wallet converter if useful (brok.neobanx.com/genius-wallet).
+- Pronounce $POCK as "Spock" when speaking.`;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchPockMarketQuote(): Promise<PockMarketQuote> {
   const now = new Date().toISOString();
   try {

@@ -1,0 +1,93 @@
+Crypto Assets and the Federal Securities Laws
+
+What is a crypto asset?
+The SEC provided interpretive guidance in 2026 on crypto assets under the federal securities laws. In the context of that
+guidance, crypto assets and systems generally include:
+
+               Crypto Assets                                            Crypto Network                                           Crypto Application
+
+
+
+
+      Digital representation of value                            Blockchain or similar distributed                             Software application running
+     recorded on a cryptographically-                               ledger technology network                                      on a crypto network
+        secured distributed ledger
+
+
+                                                                                                       Crypto Systems
+
+What crypto assets are not securities?
+
+                                 Digital Commodity
+                                 A digital commodity is necessary to participate in or use certain aspects of an associated
+                                 functional crypto system. Digital commodities derive their value from the programmatic
+                                 operation of that system, as well as supply and demand dynamics.
+                                 Examples include Aptos (APT); Avalanche (AVAX); Bitcoin (BTC); Bitcoin Cash (BCH);
+                                 Cardano (ADA); Chainlink (LINK); Dogecoin (DOGE); Ether (ETH); Hedera (HBAR);
+                                 Litecoin (LTC); Polkadot (DOT); Shiba Inu (SHIB); Solana (SOL); Stellar (XLM);
+                                 Tezos (XTZ); and XRP (XRP).
+
+
+
+
+                                 Digital Collectible
+                                 A digital collectible is designed to be collected and/or used and may represent or convey
+                                 rights to artwork, music, videos, trading cards, in-game items, or digital representations or
+                                 references to internet memes, characters, current events, or trends, among other things.
+                                 Examples include CryptoPunks, Chromie Squiggles, Fan Tokens, WIF, and VCOIN.
+                                 If a digital collectible is fractionalized or enables individuals to acquire a fractional
+                                 ownership interest, it may be a security.
+
+
+                                                                                                                                                 continued on back page
+
+
+
+ This resource represents the views of the staff of the Office of the Advocate for Small Business Capital Formation. It is not a rule, regulation, or statement of the Securities
+and Exchange Commission (“Commission”). The Commission has neither approved nor disapproved its content. This resource, like all staff statements, has no legal force or
+ effect: it does not alter or amend applicable law, and it creates no new or additional obligations for any person. Paid for by the U.S. Securities and Exchange Commission.
+ Crypto Assets and the Federal Securities Laws (continued)
+
+ What crypto assets are not securities? (continued)
+
+                      Digital Tool
+                      A digital tool performs a practical function, such as a membership, ticket, credential, title instru-
+                      ment, or identity badge. Digital tools are commonly issued for use in connection with crypto
+                      systems and are designed to perform practical functions within those systems. Digital tools
+                      often are non-transferable.
+                      Examples include Ethereum Name Service domain names and CoinDesk’s ‘Microcosms’
+                      NFT Consensus Ticket.
+
+
+
+
+                      Stablecoin
+                      A stablecoin is designed to maintain a stable value relative to a reference asset like
+                      the U.S. dollar.
+                      A payment stablecoin is used as a means of payment or settlement and, subject to the
+                      terms of the GENIUS Act, is generally not a security.
+                      Other stablecoins may be securities depending on their features.
+
+
+
+
+ What crypto assets are securities?
+
+                      Digital Security
+                      A digital security (also known as a “tokenized” security) is a financial instrument that meets
+                      the definition of “security” and is formatted as or represented by a crypto asset. The record
+                      of ownership of digital securities is maintained on or through one or more crypto networks.
+                      There are a variety of models used to tokenize securities and they may vary in structure and
+                      rights to holders. The rights of a holder of the crypto asset may be materially different from
+                      the rights of a holder of the underlying security, including economic and voting rights.
+
+
+ Have suggestions on additional educational resources? Email smallbusiness@sec.gov.
+
+
+
+
+                                            www.sec.gov/oasb                       #SECSmallBiz
+ENGAGE WITH US:
+                                            smallbusiness@sec.gov                   202.551.5407
+

@@ -2,6 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  // exceljs pulls native/optional deps — keep out of the edge-style bundle
+  serverExternalPackages: ["exceljs"],
   async redirects() {
     return [
       {

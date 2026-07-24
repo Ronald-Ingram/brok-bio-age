@@ -6,6 +6,7 @@ import { PaymentMethodsBadges } from "@/components/PaymentMethodsBadges";
 import { PockAssetDisclaimer } from "@/components/PockAssetDisclaimer";
 import { PockPricingDisclosure } from "@/components/PockPricingDisclosure";
 import { PockPurchaseEstimate } from "@/components/PockPurchaseEstimate";
+import { PockUsdConverter } from "@/components/PockUsdConverter";
 import { PrepaidCardLimitModal } from "@/components/PrepaidCardLimitModal";
 import {
   formatEstimatedPock,
@@ -163,6 +164,8 @@ function BuyPockContent() {
         </header>
 
         <PockPricingDisclosure />
+
+        <PockUsdConverter />
 
         {canceled && (
           <p className="text-sm text-amber-400/90 text-center rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3">

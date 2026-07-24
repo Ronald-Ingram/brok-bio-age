@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isUserFrozen } from "@/lib/emergencyKill";
 
 type BrokUserRow = Record<string, unknown>;
 
@@ -77,6 +78,9 @@ export async function creditPockFromStripe(
     note?: string;
   }
 ): Promise<BrokUserRow> {
+  if (isUserFrozen(opts.userId)) {
+    throw new Error("account_frozen");
+  }
   const { data, error } = await supabase.rpc("credit_pock_from_stripe", {
     p_user_id: opts.userId,
     p_amount: opts.amount,

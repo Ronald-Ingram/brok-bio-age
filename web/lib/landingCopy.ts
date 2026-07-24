@@ -42,11 +42,185 @@ export const FTEP_BODY = [
   "Every individual, community, organization, and nation will eventually be scored on FTEP — how much real wealth, healthspan, and sovereign capability they produce per unit of human time. BROK is the console that raises your FTEP without hiring a hundred people.",
 ] as const;
 
-export const FTEP_METRICS = [
-  { label: "~100 FTEP", detail: "Target leverage for a solo operator with BROK" },
-  { label: "ZPE", detail: "Zero Person Enterprise — team-scale output, sovereign control" },
-  { label: "Time + healthspan", detail: "The assets FTEP is meant to protect" },
-] as const;
+export const FTEP_METRICS: {
+  label: string;
+  detail: string;
+  body: string;
+}[] = [
+  {
+    label: "~100 FTEP",
+    detail: "One FTEP ≈ one average human in the role",
+    body:
+      "One FTEP is equivalent to the output of one average human in that role — so ~100 FTEP means an AI engine (here, BROK) is approximately equal to the productivity of 100 people. BROK aims to be the first 100-FTEP machine: one human plus BROK matching a pre-singularity legacy company that employed ~100 humans. Ingram argues this is how nations will measure economic capacity and growth.",
+  },
+  {
+    label: "ZPE",
+    detail: "Zero Person Enterprise — team-scale output, sovereign control",
+    body:
+      "Imagine the impact on GDP if unemployed, disabled, and disenfranchised humans can each create ZPEs — team-scale enterprises without a traditional org chart. Scaled to families and nations, that is a step change in national productivity, revenue, and abundance: more people generating real economic output under sovereign control, not locked out of the legacy payroll model.",
+  },
+  {
+    label: "Time + healthspan",
+    detail: "The assets FTEP and abundance are meant to protect",
+    body:
+      "With abundance and economic stability come higher aspirations — and wealth without health is hollow. From the start of the wealth-and-abundance journey, BROK provides health education and access to non-medical health research: tools and knowledge for seekers on the quest for health alongside financial freedom. Not medical advice — education and research framing so you can pursue longevity with the same intentionality as capital.",
+  },
+];
+
+/** Extensible Singularity Economics block (formulas + symbols) — add entries over time. */
+export const SINGULARITY_ECONOMICS_TITLE = "Singularity Economics";
+
+/** One line under the title when collapsed (click to expand). */
+export const SINGULARITY_ECONOMICS_TEASER =
+  "A new economic theory for the singularity age — AI, crypto, robotics, energy, and health reshaping civilization faster than the industrial revolution.";
+
+export const SINGULARITY_ECONOMICS_DEFINITION =
+  "A new economic theory for a new age — the age of the singularity in AI — encompassing crypto, robotics, energy, and health breakthroughs that disrupt models across actuarial risk, health, education, and civilization more profoundly than the shift from agrarian economies to the industrial age. We are in the singularity age: progress multiplies exponentially across fields. Old limits and “laws” as seen through binary financial systems, rigid logic, and reductionist scientific theories must bend or break.";
+
+export type FormulaBlock = {
+  id: string;
+  title: string;
+  blurb: string;
+  /** Display lines for the equation (rendered as stacked formula card). */
+  formula: string;
+  symbols: { symbol: string; meaning: string }[];
+};
+
+export const SINGULARITY_ECONOMICS_FORMULAS: FormulaBlock[] = [
+  {
+    id: "ftep",
+    title: "FTEP — Full-Time Equivalent Person (FTEPower)",
+    blurb:
+      "AI/robotic productive capacity relative to a human baseline in the same metric. Unit: human-equivalents (h-eq). FTEP ≈ 100 means roughly the output of 100 average humans in that role — the target for one human + BROK.",
+    formula: "FTEP = O_AI / O_H",
+    symbols: [
+      {
+        symbol: "O_AI",
+        meaning:
+          "AI / system output (tasks completed, value created, or standardized units such as computations per second)",
+      },
+      {
+        symbol: "O_H",
+        meaning:
+          "Average human full-time output in the same metric — one baseline worker in that role",
+      },
+      {
+        symbol: "FTEP",
+        meaning:
+          "Human-equivalent productivity ratio (h-eq). Core productivity multiplier of Singularity Economics",
+      },
+    ],
+  },
+  {
+    id: "energy-efficiency",
+    title: "Energy efficiency (E) — MPG for productive capacity",
+    blurb:
+      "How much human-equivalent output you get per unit of energy — sustainable leverage, not brute force.",
+    formula: "E = FTEP / W",
+    symbols: [
+      {
+        symbol: "E",
+        meaning: "Energy efficiency (human-equivalents per watt, or per kWh at scale)",
+      },
+      {
+        symbol: "W",
+        meaning: "Energy consumption in watts (or kWh for larger systems)",
+      },
+    ],
+  },
+  {
+    id: "p-nat",
+    title: "National / aggregate productive capacity (P_nat)",
+    blurb:
+      "How nations and communities will measure economic capacity in the singularity age: sum of machine FTEP plus remaining human work.",
+    formula: "P_nat = Σ FTEP_i  +  J   (i = 1 … n)",
+    symbols: [
+      {
+        symbol: "P_nat",
+        meaning: "Total productive capacity of a nation, network, or community",
+      },
+      {
+        symbol: "n",
+        meaning: "Number of AI systems and/or Zero Person Enterprises (ZPEs)",
+      },
+      {
+        symbol: "FTEP_i",
+        meaning: "FTEP of the i-th AI system or ZPE",
+      },
+      {
+        symbol: "J",
+        meaning: "Remaining human jobs (hybrid measure — people still in the loop)",
+      },
+    ],
+  },
+  {
+    id: "zpe",
+    title: "ZPE contribution (Z)",
+    blurb:
+      "Zero Person Enterprises as a scalable term: many sovereign ZPEs, each carrying average FTEP, compound national and family abundance.",
+    formula: "Z = m × FTEP̄_ZPE",
+    symbols: [
+      {
+        symbol: "Z",
+        meaning: "Aggregate ZPE productive contribution (human-equivalents)",
+      },
+      {
+        symbol: "m",
+        meaning: "Number of Zero Person Enterprises",
+      },
+      {
+        symbol: "FTEP̄_ZPE",
+        meaning: "Average FTEP per ZPE",
+      },
+    ],
+  },
+  {
+    id: "c-roi",
+    title: "C-ROI — Computational Return on Investment",
+    blurb:
+      "Master efficiency metric for singularity stacks: economic, transactional, agentic, and societal value per unit of compute, energy, and residual regulatory drag. Higher C-ROI systems attract capital, talent, and network effects. V_out includes ZPE activations and BROK/IEM decisions.",
+    formula:
+      "C-ROI = (V_out × E_space × S_settle × R_free) / (C_in + P_consumed + R_residual)",
+    symbols: [
+      {
+        symbol: "V_out",
+        meaning:
+          "Value output (USD or tokenized) — settled volume, BROK/IEM decisions, ZPE activations, network utility",
+      },
+      {
+        symbol: "E_space",
+        meaning:
+          "Space infrastructure efficiency multiplier (orbital compute, energy, latency advantages as they scale)",
+      },
+      {
+        symbol: "S_settle",
+        meaning:
+          "Settlement security premium (e.g. Bitcoin finality with efficient execution layers)",
+      },
+      {
+        symbol: "R_free",
+        meaning:
+          "Regulatory freedom / sovereign-collapse multiplier — gains from collapsing irrational compliance drag",
+      },
+      {
+        symbol: "C_in",
+        meaning: "Computational input (FLOPs, core-hours, normalized compute units)",
+      },
+      {
+        symbol: "P_consumed",
+        meaning: "Power / energy consumed (kWh or normalized energy units)",
+      },
+      {
+        symbol: "R_residual",
+        meaning:
+          "Residual regulatory cost remaining; approaches zero in a fully sovereign / extraterritorial model",
+      },
+    ],
+  },
+];
+
+export const SINGULARITY_ECONOMICS_FOOTNOTE =
+  "Conceptual framework for education and product design — not investment advice, not audited financial statements, not medical advice. Formulas will expand as Singularity Economics develops.";
 
 export const USE_CASES: { title: string; body: string }[] = [
   {

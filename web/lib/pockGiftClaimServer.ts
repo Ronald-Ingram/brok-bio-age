@@ -1,5 +1,6 @@
 import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isUserFrozen } from "@/lib/emergencyKill";
 import { onFirstGiftReceive } from "@/lib/giftOutreach";
 import { creditPockFromStripe } from "@/lib/stripePockCredit";
 import { verifyInvite, type PockInvitePayload } from "@/lib/pockInvite";
@@ -69,6 +70,13 @@ export async function claimGiftForUser(
   const payload = verifyClaimableInvite(token);
   if (!payload) {
     throw new GiftClaimError("invite_expired_or_invalid", 400);
+  }
+
+  if (isUserFrozen(userId)) {
+    throw new GiftClaimError("account_frozen", 403);
+  }
+  if (payload.senderId && isUserFrozen(payload.senderId)) {
+    throw new GiftClaimError("sender_frozen", 403);
   }
 
   const inviteKey = inviteKeyFromToken(token);

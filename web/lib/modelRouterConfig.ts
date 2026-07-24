@@ -27,14 +27,14 @@ export const MODEL_ROUTING: ModelRoute[] = [
   },
   {
     id: "groq",
-    label: "BROK Intelligence (Llama 70B)",
-    model: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+    label: "BROK Intelligence (GPT-OSS 120B)",
+    model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
     role: "primary",
     envKey: "GROQ_API_KEY",
   },
   {
     id: "grok",
-    label: "BROK Genius (Grok) — markets/crypto/regs first",
+    label: "BROK Genius — markets/crypto/regs first",
     model: process.env.XAI_MODEL ?? "grok-3",
     // Preferential for live markets / crypto / banking regs / deep investments;
     // also capacity backup for all topics when Groq is limited.

@@ -7,13 +7,18 @@ import {
 import { BusinessCanvasPanel } from "@/components/BusinessCanvasPanel";
 import { InneagramPanel } from "@/components/InneagramPanel";
 import { IemReportModal } from "@/components/IemReportModal";
+import { FinancialsModal } from "@/components/FinancialsModal";
 import { forceFullMediaVolume } from "@/lib/audioGain";
 import { sanitizeBrokAvatarError } from "@/lib/brokAvatarErrors";
 import { BROK_REFERENCE_IMAGE } from "@/lib/brokApiConfig";
 import type { IemReportPayload } from "@/lib/iemReportTypes";
+import type { FinancialsPayload } from "@/lib/financialsTypes";
 import {
   BROK_AVATAR_LABEL,
   BROK_VOICE_CLONE_LABEL,
+  modelDisplayLabel,
+  sanitizeUserFacingError,
+  sanitizeUserFacingText,
   voiceDisplayName,
 } from "@/lib/brokProductLabels";
 import { spokenExcerpt, wantsFullLengthSpeech } from "@/lib/spokenExcerpt";
@@ -22,6 +27,7 @@ import { usePock } from "@/context/PockContext";
 import { MAX_ATTACHMENTS } from "@/lib/brokFileIngest";
 import {
   BarChart3,
+  FileSpreadsheet,
   FileUp,
   LayoutGrid,
   Loader2,
@@ -123,7 +129,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
   const [loading, setLoading] = useState(false);
   const [iemReportLoading, setIemReportLoading] = useState(false);
   const [iemReport, setIemReport] = useState<IemReportPayload | null>(null);
+  const [financialsLoading, setFinancialsLoading] = useState(false);
+  const [financials, setFinancials] = useState<FinancialsPayload | null>(null);
   const [inneagramOpen, setInneagramOpen] = useState(false);
+  const sendRef = useRef<(override?: string) => Promise<void>>(async () => {});
   const [canvasOpen, setCanvasOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
@@ -244,14 +253,40 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
 
   const {
     listening,
+    ready: micReady,
     supported: sttSupported,
     toggle: toggleListen,
     start: startListening,
     stop: stopListening,
   } = useBrowserSpeechInput({
     getValue: () => messageRef.current,
-    setValue: setMessage,
+    setValue: (text) => {
+      setMessage(text);
+      messageRef.current = text;
+    },
     onError: (msg) => setError(msg),
+    onStopWithText: (text) => {
+      // Tap Mic again (or release hold) → send once we have a transcript.
+      const t = text.trim();
+      if (t.length < 2) return;
+      void sendRef.current(t);
+    },
+    onReady: () => {
+      // Cut avatar/voice playback so the mic isn't fighting TTS.
+      speakAbortRef.current = true;
+      try {
+        heygenRef.current?.stopSpeaking?.();
+      } catch {
+        /* ignore */
+      }
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+        } catch {
+          /* ignore */
+        }
+      }
+    },
   });
 
   const useHeyGenLive = Boolean(avatarOn && status?.heygen);
@@ -738,6 +773,51 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     }
   };
 
+  const handleGenerateFinancials = async () => {
+    if (!message.trim() && !pendingFiles.length && !fileContexts.length) return;
+    setError(null);
+    setFinancialsLoading(true);
+
+    try {
+      const { contexts } = await uploadPendingFiles(fileContexts, fileIds);
+      const res = await fetch("/api/brok/financials", {
+        method: "POST",
+        headers: await brokAuthHeaders(),
+        body: JSON.stringify({
+          message:
+            message.trim() ||
+            "Prepare internally prepared financial statements (Income Statement, Balance Sheet, Cash Flow) from the attached materials. Interview for missing data; label as management draft only.",
+          file_contexts: contexts.length ? contexts : undefined,
+          user_id: user?.id,
+        }),
+      });
+
+      const data = (await res.json()) as FinancialsPayload & {
+        error?: string;
+        hint?: string;
+      };
+      if (!res.ok) {
+        throw new Error(data.hint ?? data.error ?? "financials_failed");
+      }
+
+      setFinancials(data);
+      // Surface a short chat note so the thread shows the action.
+      const summary = `Internally prepared financials ready for ${data.package.entity_name} (${data.package.period_label}). ${data.package.incomplete ? "Incomplete draft — answer the interview questions and re-run Financials." : "Draft ready — download Excel from the panel."}`;
+      setChatTurns((prev) => [
+        {
+          id: `fin-${Date.now()}`,
+          role: "assistant",
+          content: summary,
+        },
+        ...prev,
+      ]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Financials package failed");
+    } finally {
+      setFinancialsLoading(false);
+    }
+  };
+
   const rearmVoiceInput = useCallback(() => {
     setMessage("");
     messageRef.current = "";
@@ -759,8 +839,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     }, 280);
   }, [startListening, sttSupported]);
 
-  const handleSend = async () => {
-    if (!message.trim() && !pendingFiles.length && !fileContexts.length) return;
+  const handleSend = async (overrideText?: string) => {
+    const draft = (overrideText ?? message).trim();
+    if (!draft && !pendingFiles.length && !fileContexts.length) return;
+    if (loading || iemReportLoading || financialsLoading) return;
     // If mic is live at send, they are in voice dialogue mode.
     if (listening) preferVoiceInputRef.current = true;
     stopListening();
@@ -769,8 +851,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
     setLoading(true);
     setResponse("");
 
-    const userMsg =
-      message.trim() || "Analyze the attached file.";
+    const userMsg = draft || "Analyze the attached file.";
     // Clear input immediately so the box is empty while BROK works.
     setMessage("");
     messageRef.current = "";
@@ -877,16 +958,11 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       }
 
       setLastUserMessage(userMsg);
-      const reply = data.response ?? "";
+      const reply = sanitizeUserFacingText(data.response ?? "");
       setResponse(reply);
-      const modelLabel =
-        data.model ||
-        data.groq_model ||
-        (data.provider ? String(data.provider) : null);
+      // Product labels only — never raw grok-3 / gpt-oss / vendor ids.
       setLastModel(
-        modelLabel
-          ? `${modelLabel}${data.used_backup ? " (backup path)" : ""}`
-          : null
+        modelDisplayLabel(data.model ?? data.groq_model, data.provider)
       );
       if (data.thread_id) {
         setThreadId(data.thread_id);
@@ -914,12 +990,13 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         /load failed|failed to fetch|networkerror/i.test(raw) &&
         !raw.includes("Network glitch")
           ? "Network glitch talking to BROK — check connection and send again."
-          : raw;
+          : sanitizeUserFacingError(raw);
       setError(msg);
     } finally {
       setLoading(false);
     }
   };
+  sendRef.current = handleSend;
 
   const hasDialogue = Boolean(response || chatTurns.length);
   // Mobile: compact when chatting with Avatar off; full-size when Avatar is ON.
@@ -938,15 +1015,21 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         </span>
         {listening ? (
           <span className="text-[11px] font-medium text-neon-cyan animate-pulse">
-            ● Listening — Stop, then Send
+            {micReady
+              ? "● Listening — speak now · tap Mic again to send"
+              : "● Starting mic… wait for ready"}
           </span>
         ) : loading ? (
           <span className="text-[11px] text-white/45">BROK thinking…</span>
         ) : voiceLoading ? (
-          <span className="text-[11px] text-white/45">BROK speaking…</span>
+          <span className="text-[11px] text-white/45">
+            BROK speaking… (tap Mic when done to ask)
+          </span>
         ) : (
           <span className="text-[11px] text-white/55">
-            Tap <strong className="text-white/80">Mic</strong> or type
+            <strong className="text-white/80">Tap Mic</strong> → wait for cyan
+            pulse → speak → <strong className="text-white/80">tap Mic</strong>{" "}
+            again to send
           </span>
         )}
       </div>
@@ -954,23 +1037,27 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         <button
           type="button"
           onClick={() => {
+            if (loading) return;
             setError(null);
             if (!listening) preferVoiceInputRef.current = true;
+            // Tap 1: start · Tap 2: stop + send (all devices — most reliable for demos)
             void toggleListen();
           }}
           disabled={loading}
           title={
             sttSupported
               ? listening
-                ? "Stop microphone"
-                : "Turn on microphone"
-              : "Dictation needs Chrome or Edge"
+                ? "Tap to stop mic and send what was heard"
+                : "Tap to start microphone — wait for Listening, then speak"
+              : "Dictation needs Chrome or Edge (Safari is limited)"
           }
-          aria-label={listening ? "Stop microphone" : "Turn on microphone"}
+          aria-label={listening ? "Stop microphone and send" : "Start microphone"}
           aria-pressed={listening}
-          className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] sm:min-w-[4.25rem] px-2 rounded-xl border transition-colors touch-manipulation ${
+          className={`shrink-0 inline-flex flex-col items-center justify-center gap-0.5 min-w-[3.75rem] sm:min-w-[4.25rem] px-2 rounded-xl border transition-colors touch-manipulation select-none ${
             listening
-              ? "border-neon-cyan/70 bg-neon-cyan/25 text-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.25)]"
+              ? micReady
+                ? "border-neon-cyan/70 bg-neon-cyan/25 text-neon-cyan shadow-[0_0_12px_rgba(34,211,238,0.25)]"
+                : "border-amber-400/50 bg-amber-400/15 text-amber-100"
               : sttSupported
                 ? "border-neon-cyan/40 bg-neon-cyan/15 text-neon-cyan"
                 : "border-white/10 bg-black/20 text-white/30"
@@ -984,7 +1071,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             <MicOff className="w-5 h-5" />
           )}
           <span className="text-[10px] font-semibold leading-none">
-            {listening ? "Stop" : "Mic"}
+            {listening ? (micReady ? "Send" : "Wait…") : "Mic"}
           </span>
         </button>
         <textarea
@@ -1000,10 +1087,12 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           autoCorrect="on"
           placeholder={
             listening
-              ? "Listening… speak now"
+              ? micReady
+                ? "Listening… words appear here — tap Mic again to send"
+                : "Mic starting… wait for cyan “Listening” then speak"
               : loading
                 ? "BROK is thinking…"
-                : "Type or tap Mic to speak…"
+                : "Type or tap Mic → speak → tap Mic again to send…"
           }
           className={`flex-1 min-w-0 px-3 py-3.5 rounded-xl bg-black/50 border text-base sm:text-sm resize-y min-h-[168px] sm:min-h-[132px] outline-none touch-manipulation ${
             listening
@@ -1016,6 +1105,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
           disabled={
             loading ||
             iemReportLoading ||
+            financialsLoading ||
             (!message.trim() && !pendingFiles.length && !fileContexts.length)
           }
           onClick={() => void handleSend()}
@@ -1031,8 +1121,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
         </button>
       </div>
       <p className="text-[10px] text-white/40 leading-snug hidden sm:block">
-        <strong className="text-white/60">Mic</strong> → speak → Send.{" "}
-        <strong className="text-white/60">Voice / Avatar</strong> = BROK talks back.
+        <strong className="text-white/60">Mic</strong>: tap → wait for Listening →
+        speak (watch text appear) → tap Mic again to send.{" "}
+        <strong className="text-white/60">Voice / Avatar</strong> = BROK talks back
+        (pause speaking before next mic question).
         {!sttSupported && (
           <span className="text-amber-200/80"> Dictation needs Chrome or Edge.</span>
         )}
@@ -1498,9 +1590,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               disabled={
                 loading ||
                 iemReportLoading ||
+                financialsLoading ||
                 (!message.trim() && !pendingFiles.length && !fileContexts.length)
               }
-              onClick={handleSend}
+              onClick={() => void handleSend()}
               className="hidden sm:inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-neon-cyan/15 border border-neon-cyan/50 text-neon-cyan text-sm font-medium hover:bg-neon-cyan/25 disabled:opacity-50 transition-colors"
             >
               {loading ? (
@@ -1515,6 +1608,7 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
               disabled={
                 loading ||
                 iemReportLoading ||
+                financialsLoading ||
                 !status?.chatReady ||
                 (!message.trim() && !pendingFiles.length && !fileContexts.length)
               }
@@ -1531,6 +1625,26 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             </button>
             <button
               type="button"
+              disabled={
+                loading ||
+                iemReportLoading ||
+                financialsLoading ||
+                !status?.chatReady ||
+                (!message.trim() && !pendingFiles.length && !fileContexts.length)
+              }
+              onClick={() => void handleGenerateFinancials()}
+              title="Internally prepared IS / BS / CF + Excel download"
+              className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-500/10 border border-emerald-400/40 text-emerald-100 text-sm font-medium hover:bg-emerald-500/20 disabled:opacity-50 transition-colors"
+            >
+              {financialsLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="w-4 h-4 text-emerald-300" />
+              )}
+              {financialsLoading ? "Building books…" : "Financials"}
+            </button>
+            <button
+              type="button"
               onClick={() => setInneagramOpen(true)}
               className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-violet-500/10 border border-violet-400/35 text-violet-200 text-sm font-medium hover:bg-violet-500/20 transition-colors sm:min-w-[140px]"
             >
@@ -1540,15 +1654,15 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
             <button
               type="button"
               onClick={() => setCanvasOpen(true)}
-              className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-500/10 border border-emerald-400/35 text-emerald-100 text-sm font-medium hover:bg-emerald-500/20 transition-colors sm:min-w-[140px]"
+              className="inline-flex flex-1 items-center justify-center gap-2 px-5 py-3 rounded-xl bg-teal-500/10 border border-teal-400/35 text-teal-100 text-sm font-medium hover:bg-teal-500/20 transition-colors sm:min-w-[140px]"
             >
               <LayoutGrid className="w-4 h-4" />
               Business Canvas
             </button>
           </div>
           <p className="text-[10px] text-white/35">
-            Business Canvas = workshop BMC. IEM = deal scorecard. Inneagram = archetype.
-            No voice/avatar tokens for those tools.
+            Financials = internally prepared statements + Excel. IEM = deal scorecard.
+            Canvas = BMC. Inneagram = archetype. Packages meter $POCK (not voice/avatar).
           </p>
 
           {(error || ((voiceOn || useHeyGenLive) && response)) && (
@@ -1572,6 +1686,10 @@ export function BrokAvatarPanel({ layout = "default" }: BrokAvatarPanelProps) {
       </section>
 
       <IemReportModal payload={iemReport} onClose={() => setIemReport(null)} />
+      <FinancialsModal
+        payload={financials}
+        onClose={() => setFinancials(null)}
+      />
       <InneagramPanel
         open={inneagramOpen}
         onClose={() => setInneagramOpen(false)}

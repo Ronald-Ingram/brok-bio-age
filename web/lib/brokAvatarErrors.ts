@@ -1,7 +1,7 @@
-import { BROK_AVATAR_LABEL } from "./brokProductLabels";
+import { BROK_AVATAR_LABEL, sanitizeUserFacingText } from "./brokProductLabels";
 
 const VENDOR_RE =
-  /heygen|liveavatar|cartesia|xtts|livekit|groq|openai|anthropic|gemini|vertex/gi;
+  /heygen|liveavatar|cartesia|xtts|livekit|groq|openai|anthropic|gemini|vertex|xai|grok/gi;
 
 /** User-facing avatar errors — never expose vendor names or internal stack codes. */
 export function sanitizeBrokAvatarError(raw: string): string {
@@ -56,7 +56,7 @@ export function sanitizeBrokAvatarError(raw: string): string {
     return `${BROK_AVATAR_LABEL} hit a temporary error — toggle off to save credits, or retry.`;
   }
 
-  let cleaned = raw.replace(VENDOR_RE, "BROK");
+  let cleaned = sanitizeUserFacingText(raw.replace(VENDOR_RE, "BROK"));
   cleaned = cleaned.replace(/liveavatar_\d+/gi, "avatar_error");
   cleaned = cleaned.replace(/heygen_/gi, "avatar_");
 

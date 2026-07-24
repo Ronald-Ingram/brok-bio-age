@@ -1,5 +1,9 @@
 import { createHash } from "crypto";
 import { getBoundUserId, mintSessionForUserId } from "@/lib/deviceBinding";
+import {
+  isNewDeviceAuthKilled,
+  isUserFrozen,
+} from "@/lib/emergencyKill";
 import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase/server";
 
@@ -17,21 +21,6 @@ function credentialsForDevice(deviceId: string): {
   const email = `bioage-${digest.slice(0, 20)}@users.brok.app`;
   const password = digest;
   return { email, password };
-}
-
-async function ensureAuthUser(email: string, password: string) {
-  const admin = getServiceSupabase();
-  const list = await admin.auth.admin.listUsers({ perPage: 1000 });
-  const existing = list.data.users.find((u) => u.email === email);
-  if (existing) return existing;
-
-  const created = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-  if (created.error) throw created.error;
-  return created.data.user;
 }
 
 async function signIn(email: string, password: string) {
@@ -53,6 +42,32 @@ async function signIn(email: string, password: string) {
   }>;
 }
 
+/** Create device user only when needed. Prefer sign-in first (works at any Auth scale). */
+async function ensureAuthUserAndSignIn(email: string, password: string) {
+  try {
+    return await signIn(email, password);
+  } catch {
+    /* user may not exist yet */
+  }
+
+  // Emergency: do not mint new synthetic device users (trial farm vector).
+  if (isNewDeviceAuthKilled()) {
+    throw new Error("new_device_auth_paused");
+  }
+
+  const admin = getServiceSupabase();
+  const created = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  // Concurrent create: another request may have won the race.
+  if (created.error && !/already|registered|exists/i.test(created.error.message)) {
+    throw created.error;
+  }
+  return signIn(email, password);
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { deviceId?: string };
@@ -63,6 +78,9 @@ export async function POST(request: Request) {
     const deviceId = body.deviceId.trim();
     const boundUserId = await getBoundUserId(deviceId);
     if (boundUserId) {
+      if (isUserFrozen(boundUserId)) {
+        return NextResponse.json({ error: "account_frozen" }, { status: 403 });
+      }
       const tokens = await mintSessionForUserId(boundUserId);
       return NextResponse.json({
         access_token: tokens.access_token,
@@ -73,8 +91,7 @@ export async function POST(request: Request) {
     }
 
     const { email, password } = credentialsForDevice(deviceId);
-    await ensureAuthUser(email, password);
-    const tokens = await signIn(email, password);
+    const tokens = await ensureAuthUserAndSignIn(email, password);
 
     return NextResponse.json({
       access_token: tokens.access_token,
@@ -82,6 +99,16 @@ export async function POST(request: Request) {
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "auth_error";
+    if (message === "new_device_auth_paused") {
+      return NextResponse.json(
+        {
+          error: "new_device_auth_paused",
+          message:
+            "New wallet creation is temporarily paused. If you already have a Genius Wallet, use “I already have a wallet” / PIN recover.",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

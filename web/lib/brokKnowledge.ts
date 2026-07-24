@@ -9,10 +9,23 @@ import {
   loadUserFacts,
 } from "./brokUserFacts";
 import {
+  KIRON_CANON_BUDDHABOT,
+  KIRON_CANON_BUDDHABOT_TAGS,
   KIRON_CANON_FIVE_CORE_VALUES,
   KIRON_CANON_FOUNDER_VALUES,
   KIRON_CANON_FOUNDER_VALUES_TAGS,
 } from "./kironCanonFounderValues";
+import {
+  KIRON_CANON_GENIUS_BOOK_FULL,
+  KIRON_CANON_GENIUS_BOOK_SUMMARY,
+  KIRON_CANON_GENIUS_BOOK_TAGS,
+} from "./kironCanonGeniusBook";
+import {
+  getBrokDifferentiationCanonBlock,
+  KIRON_CANON_BROK_DIFF_DOCS,
+  KIRON_CANON_BROK_DIFF_ROUTER,
+  KIRON_CANON_BROK_DIFF_ROUTER_TAGS,
+} from "./kironCanonBrokDifferentiation";
 import { getServiceSupabase } from "./supabase/server";
 
 /**
@@ -369,7 +382,7 @@ export async function seedFaqToCanon(): Promise<{ inserted: number; skipped: num
 
   return { inserted, skipped };
 }
-/** Upsert founder ethics / values / history Canon into core_knowledge. */
+/** Upsert founder ethics / values / history + Genius book Canon into core_knowledge. */
 export async function seedFounderValuesToCanon(): Promise<{
   inserted: number;
   updated: number;
@@ -381,10 +394,31 @@ export async function seedFounderValuesToCanon(): Promise<{
       content: KIRON_CANON_FOUNDER_VALUES,
     },
     {
+      tags: KIRON_CANON_BUDDHABOT_TAGS,
+      content: KIRON_CANON_BUDDHABOT,
+    },
+    {
       tags:
         "Kiron Canon|tier:highest|truth|values|privacy|security|sovereignty|innovation|community|ingram",
       content: KIRON_CANON_FIVE_CORE_VALUES,
     },
+    {
+      tags: KIRON_CANON_GENIUS_BOOK_TAGS,
+      content: KIRON_CANON_GENIUS_BOOK_FULL,
+    },
+    {
+      tags:
+        "Kiron Canon|tier:highest|truth|apotheosis|godlike genius|pride|theosis|ethics|genius book|live long and prosper|genius the book|ingram",
+      content: KIRON_CANON_GENIUS_BOOK_SUMMARY,
+    },
+    {
+      tags: KIRON_CANON_BROK_DIFF_ROUTER_TAGS,
+      content: KIRON_CANON_BROK_DIFF_ROUTER,
+    },
+    ...KIRON_CANON_BROK_DIFF_DOCS.map((d) => ({
+      tags: d.tags,
+      content: d.content,
+    })),
   ];
 
   let inserted = 0;
@@ -414,5 +448,20 @@ export async function seedFounderValuesToCanon(): Promise<{
  * (works even before DB seed; also lives in core_knowledge after seed).
  */
 export function getFounderValuesCanonBlock(): string {
-  return KIRON_CANON_FOUNDER_VALUES + "\n\n" + KIRON_CANON_FIVE_CORE_VALUES;
+  return (
+    KIRON_CANON_FOUNDER_VALUES +
+    "\n\n" +
+    KIRON_CANON_BUDDHABOT +
+    "\n\n" +
+    KIRON_CANON_FIVE_CORE_VALUES
+  );
 }
+
+/** Always-available Genius book / apotheosis Canon (static inject + DB seed). */
+export function getGeniusBookCanonBlock(): string {
+  return (
+    KIRON_CANON_GENIUS_BOOK_SUMMARY + "\n\n" + KIRON_CANON_GENIUS_BOOK_FULL
+  );
+}
+
+export { getBrokDifferentiationCanonBlock };

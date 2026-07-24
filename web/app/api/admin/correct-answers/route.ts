@@ -75,15 +75,24 @@ export async function POST(req: Request) {
   const body = (await req.json()) as {
     chatLogId?: string;
     correctedAnswer?: string;
-    scope?: "short_term" | "canonical";
+    scope?: "short_term" | "medium_term" | "canonical";
     userId?: string;
     questionPattern?: string;
     highIq?: boolean;
     adminNote?: string;
+    title?: string;
   };
 
   if (!body.chatLogId?.trim() || !body.correctedAnswer?.trim() || !body.scope) {
     return NextResponse.json({ error: "missing_fields" }, { status: 400 });
+  }
+
+  if (
+    body.scope !== "short_term" &&
+    body.scope !== "medium_term" &&
+    body.scope !== "canonical"
+  ) {
+    return NextResponse.json({ error: "invalid_scope" }, { status: 400 });
   }
 
   const supabase = getServiceSupabase();
@@ -100,18 +109,68 @@ export async function POST(req: Request) {
   }
 
   const userId = body.userId ?? logRow.user_id;
+  const answer = body.correctedAnswer.trim();
+  const pattern =
+    body.questionPattern?.trim() || logRow.question.slice(0, 160);
+  let memoryId: string | null = null;
 
   if (body.scope === "short_term") {
-    const { error: memErr } = await supabase.from("brok_short_term_memory").insert({
-      user_id: userId ?? null,
-      question_pattern: body.questionPattern ?? logRow.question.slice(0, 120),
-      content: `Q: ${logRow.question}\nA: ${body.correctedAnswer.trim()}`,
-      source_chat_log_id: logRow.id,
-      expires_at: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString(),
-    });
+    const { data: memRow, error: memErr } = await supabase
+      .from("brok_short_term_memory")
+      .insert({
+        // Global so all users get the correction (admin product truth fix)
+        user_id: null,
+        question_pattern: pattern,
+        content: `Q: ${logRow.question}\nA: ${answer}`,
+        source_chat_log_id: logRow.id,
+        expires_at: new Date(
+          Date.now() + 90 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+      })
+      .select("id")
+      .maybeSingle();
     if (memErr) {
       return NextResponse.json({ error: memErr.message }, { status: 500 });
     }
+    memoryId = memRow?.id ?? null;
+  }
+
+  if (body.scope === "medium_term") {
+    const title =
+      body.title?.trim() ||
+      `Corrected: ${logRow.question.slice(0, 80)}${logRow.question.length > 80 ? "…" : ""}`;
+    const keywords = String(logRow.question ?? "")
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((w: string) => w.length > 3)
+      .slice(0, 8)
+      .join(" ");
+    const { data: memRow, error: memErr } = await supabase
+      .from("brok_medium_term_memory")
+      .insert({
+        user_id: null,
+        title,
+        content: `Q: ${logRow.question}\n\nA: ${answer}`,
+        tags: ["admin_corrected", "medium", "chat_log"],
+        question_patterns: [pattern, keywords].filter(Boolean).join(" | "),
+        source: `chat_log:${logRow.id}`,
+        expires_at: new Date(
+          Date.now() + 30 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+        access_count: 0,
+      })
+      .select("id")
+      .maybeSingle();
+    if (memErr) {
+      return NextResponse.json(
+        {
+          error: memErr.message,
+          hint: "If column mismatch, check brok_medium_term_memory schema (title, content, tags, question_patterns, expires_at).",
+        },
+        { status: 500 }
+      );
+    }
+    memoryId = memRow?.id ?? null;
   }
 
   if (body.scope === "canonical") {
@@ -119,12 +178,12 @@ export async function POST(req: Request) {
     const content = formatFaqForCanon({
       id: truthId,
       question: logRow.question,
-      answer: body.correctedAnswer.trim(),
+      answer,
     });
     const tags = canonTagsForFaq({
       id: truthId,
       question: logRow.question,
-      answer: body.correctedAnswer.trim(),
+      answer,
       tags: ["admin_corrected"],
     });
 
@@ -141,7 +200,7 @@ export async function POST(req: Request) {
   await supabase
     .from("brok_chat_log")
     .update({
-      corrected_answer: body.correctedAnswer.trim(),
+      corrected_answer: answer,
       correction_scope: body.scope,
       corrected_at: now,
     })
@@ -159,5 +218,15 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, scope: body.scope });
+  return NextResponse.json({
+    ok: true,
+    scope: body.scope,
+    memory_id: memoryId,
+    message:
+      body.scope === "short_term"
+        ? "Saved to short-term memory (~90 days). Injected when similar questions match."
+        : body.scope === "medium_term"
+          ? "Saved to medium-term memory (~30 days). Visible in Medium Memory panel."
+          : "Saved to Kiron Canon (core_knowledge). Permanent product truth.",
+  });
 }

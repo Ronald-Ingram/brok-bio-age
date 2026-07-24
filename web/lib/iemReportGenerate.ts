@@ -4,7 +4,7 @@ import type { IemReportData } from "./iemReportTypes";
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY?.trim() ?? "";
 const GROQ_MODEL =
-  process.env.GROQ_MODEL?.trim() ?? "llama-3.3-70b-versatile";
+  process.env.GROQ_MODEL?.trim() ?? "openai/gpt-oss-120b";
 
 const REPORT_SYSTEM = `You are BROK, producing a formal Ingram Evaluation Matrix (IEM) decision report.
 Output ONLY valid JSON matching the schema below. No markdown fences, no commentary outside JSON.

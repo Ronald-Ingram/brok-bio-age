@@ -4,6 +4,10 @@ import {
   giftClaimRegisterUrl,
 } from "@/lib/giftPockMessage";
 import {
+  isP2pTransfersKilled,
+  isUserFrozen,
+} from "@/lib/emergencyKill";
+import {
   generateClaimPassword,
   inviteExpiresAt,
   isValidEmail,
@@ -80,6 +84,19 @@ export async function POST(req: Request) {
     }
 
     const senderId = authData.user.id;
+    if (isUserFrozen(senderId)) {
+      return NextResponse.json({ error: "account_frozen" }, { status: 403 });
+    }
+    if (isP2pTransfersKilled()) {
+      return NextResponse.json(
+        {
+          error: "transfers_disabled",
+          message:
+            "Gifts and sends are temporarily paused while we stop automated abuse. Card top-ups and your balance are safe.",
+        },
+        { status: 503 }
+      );
+    }
     const inviteKind = body.inviteKind === "gift" ? "gift" : "transfer";
     const recipientName = body.recipientName?.trim();
     // Accept full UUID, BROK-BD66A7B6, or compact hex — resolve to real user id.
@@ -97,6 +114,12 @@ export async function POST(req: Request) {
         );
       }
       recipientBrokId = resolved;
+    }
+    if (recipientBrokId && isUserFrozen(recipientBrokId)) {
+      return NextResponse.json(
+        { error: "recipient_frozen", message: "Cannot send to this account." },
+        { status: 403 }
+      );
     }
 
     let giftUsdEquivalent: number | undefined;
@@ -186,6 +209,22 @@ export async function POST(req: Request) {
     if (debitErr) {
       if (debitErr.message?.includes("insufficient_pock")) {
         return NextResponse.json({ error: "insufficient_pock" }, { status: 400 });
+      }
+      if (debitErr.message?.includes("transfers_disabled")) {
+        return NextResponse.json({ error: "transfers_disabled" }, { status: 503 });
+      }
+      if (debitErr.message?.includes("account_frozen")) {
+        return NextResponse.json({ error: "account_frozen" }, { status: 403 });
+      }
+      if (debitErr.message?.includes("min_reserve_required")) {
+        return NextResponse.json(
+          {
+            error: "min_reserve_required",
+            message:
+              "Genius Wallet keeps at least 100 $POCK reserved (including welcome trial). Enter a smaller amount.",
+          },
+          { status: 400 }
+        );
       }
       return NextResponse.json({ error: debitErr.message }, { status: 500 });
     }

@@ -18,11 +18,16 @@ import {
   CUSTODY_VOLATILITY_NOTE,
 } from "@/lib/custodyCopy";
 import { AccountRestorePanel } from "@/components/AccountRestorePanel";
-import { ensureAuthSession } from "@/lib/pockService";
+import {
+  ensureAuthSession,
+  externalTransferableFromUser,
+  MIN_GENIUS_RESERVE_POCK,
+  settlePendingCustodyReleases,
+} from "@/lib/pockService";
 import { getSupabase } from "@/lib/supabase/client";
 import { isValidSolanaAddress, shortSolanaAddress } from "@/lib/custody";
 import type { CustodySettlementResult } from "@/lib/pockService";
-import { settlePendingCustodyReleases } from "@/lib/pockService";
+import { reserveCopy } from "@/lib/pockReserve";
 import { POCK_ONCHAIN_DEX_URL } from "@/lib/purchaseConfig";
 import { solscanTxUrl } from "@/lib/solanaPockTransfer";
 import { ExternalLink, Link2, Loader2, Shield, Wallet } from "lucide-react";
@@ -186,9 +191,18 @@ export function CustodyStatusPanel() {
   const handleRelease = async () => {
     setError(null);
     setReleaseNote(null);
+    const transferable = externalTransferableFromUser(user);
     const n = parseInt(releaseAmount, 10);
-    if (!Number.isFinite(n) || n < 1 || n > user.pock_balance) {
-      setError(`Enter 1–${user.pock_balance} $POCK`);
+    if (!Number.isFinite(n) || n < 1) {
+      setError("Type how many $POCK to move (required — no Max empty).");
+      return;
+    }
+    if (n > transferable) {
+      setError(
+        transferable < 1
+          ? `At least ${MIN_GENIUS_RESERVE_POCK} $POCK stays in Genius Wallet.`
+          : `Enter 1–${transferable} $POCK (keeps ${MIN_GENIUS_RESERVE_POCK} reserved).`
+      );
       return;
     }
     const dest = useCustomDest ? destOverride.trim() : undefined;
@@ -215,8 +229,12 @@ export function CustodyStatusPanel() {
         setError("No reserved $POCK to release");
       } else if (msg === "wallet_not_connected") {
         setError("Connect a Solana wallet first");
+      } else if (msg === "min_reserve_required" || msg === "amount_required") {
+        setError(
+          `Genius Wallet keeps ≥${MIN_GENIUS_RESERVE_POCK} $POCK. Type a smaller amount.`
+        );
       } else if (msg === "amount_invalid") {
-        setError(`Enter 1–${user.pock_balance} $POCK`);
+        setError(`Enter 1–${transferable} $POCK`);
       } else {
         setError(msg);
       }
@@ -362,25 +380,23 @@ export function CustodyStatusPanel() {
         </div>
       )}
 
-      {!reserved && hasWallet && user.pock_balance > 0 && (
+      {!reserved && hasWallet && externalTransferableFromUser(user) > 0 && (
         <div className="space-y-3 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4">
-          <p className="text-xs text-white/55">Send reserved $POCK on-chain (partial or full)</p>
+          <p className="text-xs text-white/55">
+            Move $POCK on-chain — type the amount (no Max empty). At least{" "}
+            {MIN_GENIUS_RESERVE_POCK} $POCK stays in Genius Wallet.
+          </p>
+          <p className="text-[11px] text-white/40 leading-relaxed">{reserveCopy()}</p>
           <div className="flex gap-2">
             <input
               type="number"
               min={1}
-              max={user.pock_balance}
+              max={externalTransferableFromUser(user)}
               value={releaseAmount}
               onChange={(e) => setReleaseAmount(e.target.value)}
+              placeholder={`Max transferable ${externalTransferableFromUser(user)}`}
               className="flex-1 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm tabular-nums outline-none focus:border-emerald-400/40"
             />
-            <button
-              type="button"
-              onClick={() => setReleaseAmount(String(user.pock_balance))}
-              className="shrink-0 px-3 py-2 rounded-lg border border-white/15 text-xs text-white/55 hover:border-emerald-400/40"
-            >
-              Max
-            </button>
           </div>
           <label className="flex items-center gap-2 text-[11px] text-white/45 cursor-pointer">
             <input

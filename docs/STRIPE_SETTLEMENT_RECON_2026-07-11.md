@@ -1,3 +1,22 @@
+---
+doc_type: recon-sample
+tags:
+  - recon
+  - stripe
+  - prepaid
+  - reserved-ledger
+  - genius-wallet
+  - pock
+  - accounting
+entities:
+  - neobanx
+rails:
+  - stripe
+  - reserved
+status: living
+updated: 2026-07-11
+---
+
 # Stripe ↔ Genius Wallet settlement recon — 2026-07-11
 
 Live pull from Supabase `avfuuzloxgqqkrdxkqzf` + Stripe live API.

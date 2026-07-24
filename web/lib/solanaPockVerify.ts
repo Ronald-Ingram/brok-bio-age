@@ -1,15 +1,19 @@
 /**
  * On-chain $POCK balance check via Solana JSON-RPC.
- * Set POCK_SPL_MINT + SOLANA_RPC_URL in env for wallet OG claims.
+ * Uses POCK_SPL_MINT (env or default mint) + SOLANA_RPC_URL.
  */
 
 import { POCK_OG_MIN_HELD } from "./ogEntitlementsConfig";
+import { POCK_SPL_MINT } from "./pockPrice";
 
 const DEFAULT_RPC = "https://api.mainnet-beta.solana.com";
 
 export interface PockWalletProof {
   wallet: string;
   balanceRaw: number;
+  /** Full UI amount (may include fractional SPL units). */
+  balanceUiExact: number;
+  /** Floor of UI amount — used for OG entitlement thresholds. */
   balanceUi: number;
   meetsMinimum: boolean;
 }
@@ -17,7 +21,7 @@ export interface PockWalletProof {
 export async function getPockSplBalance(
   walletAddress: string
 ): Promise<PockWalletProof> {
-  const mint = process.env.POCK_SPL_MINT?.trim();
+  const mint = POCK_SPL_MINT;
   const rpc = process.env.SOLANA_RPC_URL?.trim() || DEFAULT_RPC;
 
   if (!mint) {
@@ -76,11 +80,13 @@ export async function getPockSplBalance(
     totalUi += Number(amt.uiAmount ?? 0);
   }
 
-  const balanceUi = Math.floor(totalUi || totalRaw);
+  const balanceUiExact = totalUi || totalRaw / 1e6;
+  const balanceUi = Math.floor(balanceUiExact);
 
   return {
     wallet: walletAddress,
     balanceRaw: totalRaw,
+    balanceUiExact,
     balanceUi,
     meetsMinimum: balanceUi >= POCK_OG_MIN_HELD,
   };

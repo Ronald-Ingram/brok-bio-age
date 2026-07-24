@@ -9,9 +9,110 @@ import {
   FTEP_TITLE,
   LANDING_CLOSING_CTA,
   LANDING_CLOSING_QUESTION,
+  SINGULARITY_ECONOMICS_DEFINITION,
+  SINGULARITY_ECONOMICS_FOOTNOTE,
+  SINGULARITY_ECONOMICS_FORMULAS,
+  SINGULARITY_ECONOMICS_TEASER,
+  SINGULARITY_ECONOMICS_TITLE,
   USE_CASES,
 } from "@/lib/landingCopy";
 import Link from "next/link";
+import type { ReactNode } from "react";
+
+/** Stacked fraction — pure CSS, no KaTeX / no new deps (demo-safe). */
+function MathFrac({
+  num,
+  den,
+}: {
+  num: ReactNode;
+  den: ReactNode;
+}) {
+  return (
+    <span className="inline-flex flex-col items-center justify-center align-middle mx-0.5 text-[0.95em] leading-none">
+      <span className="px-1.5 pb-1 border-b border-current">{num}</span>
+      <span className="px-1.5 pt-1">{den}</span>
+    </span>
+  );
+}
+
+function MathSub({ children }: { children: ReactNode }) {
+  return <sub className="text-[0.65em] opacity-90">{children}</sub>;
+}
+
+/** Proper notation without third-party math libraries. */
+function FormulaDisplay({ id, fallback }: { id: string; fallback: string }) {
+  const base =
+    "inline-flex flex-wrap items-center justify-center gap-x-1 gap-y-1 font-serif text-base sm:text-lg text-neon-cyan";
+  switch (id) {
+    case "ftep":
+      return (
+        <span className={base} role="math" aria-label={fallback}>
+          FTEP ={" "}
+          <MathFrac
+            num={
+              <>
+                O<MathSub>AI</MathSub>
+              </>
+            }
+            den={
+              <>
+                O<MathSub>H</MathSub>
+              </>
+            }
+          />
+        </span>
+      );
+    case "energy-efficiency":
+      return (
+        <span className={base} role="math" aria-label={fallback}>
+          E = <MathFrac num="FTEP" den="W" />
+        </span>
+      );
+    case "p-nat":
+      return (
+        <span className={base} role="math" aria-label={fallback}>
+          P
+          <MathSub>nat</MathSub> = Σ
+          <MathSub>i=1</MathSub>
+          <sup className="text-[0.65em] relative -top-1">n</sup> FTEP
+          <MathSub>i</MathSub> + J
+        </span>
+      );
+    case "zpe":
+      return (
+        <span className={base} role="math" aria-label={fallback}>
+          Z = m × FTEP̄
+          <MathSub>ZPE</MathSub>
+        </span>
+      );
+    case "c-roi":
+      return (
+        <span className={base} role="math" aria-label={fallback}>
+          C-ROI ={" "}
+          <MathFrac
+            num={
+              <>
+                V<MathSub>out</MathSub> × E<MathSub>space</MathSub> × S
+                <MathSub>settle</MathSub> × R<MathSub>free</MathSub>
+              </>
+            }
+            den={
+              <>
+                C<MathSub>in</MathSub> + P<MathSub>consumed</MathSub> + R
+                <MathSub>residual</MathSub>
+              </>
+            }
+          />
+        </span>
+      );
+    default:
+      return (
+        <span className={`${base} font-mono text-sm`} role="math">
+          {fallback}
+        </span>
+      );
+  }
+}
 
 export function LandingSections() {
   return (
@@ -68,13 +169,81 @@ export function LandingSections() {
           {FTEP_METRICS.map((m) => (
             <div
               key={m.label}
-              className="rounded-xl border border-white/10 bg-black/25 px-4 py-3"
+              className="rounded-xl border border-white/10 bg-black/25 px-4 py-4 space-y-2 cursor-default select-text"
             >
               <p className="text-neon-cyan font-semibold text-base">{m.label}</p>
-              <p className="text-[12px] text-white/40 mt-1 leading-snug">{m.detail}</p>
+              <p className="text-[12px] text-white/50 leading-snug font-medium">
+                {m.detail}
+              </p>
+              <p className="text-[12px] sm:text-[13px] text-white/40 leading-relaxed">
+                {m.body}
+              </p>
             </div>
           ))}
         </div>
+
+        {/* Singularity Economics — compact, click to expand (no new deps) */}
+        <details
+          id="singularity-economics"
+          className="mt-4 group rounded-lg border border-white/10 bg-black/20 open:border-violet-400/25 open:bg-black/30"
+        >
+          <summary className="cursor-pointer list-none px-4 py-3 flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3 select-none [&::-webkit-details-marker]:hidden">
+            <span className="text-sm font-medium text-white/75 group-open:text-violet-200 shrink-0">
+              {SINGULARITY_ECONOMICS_TITLE}
+              <span className="ml-2 text-[11px] font-normal text-white/35 group-open:hidden">
+                · expand
+              </span>
+              <span className="ml-2 text-[11px] font-normal text-white/35 hidden group-open:inline">
+                · collapse
+              </span>
+            </span>
+            <span className="text-[12px] sm:text-[13px] text-white/40 leading-snug group-open:hidden">
+              {SINGULARITY_ECONOMICS_TEASER}
+            </span>
+          </summary>
+          <div className="px-4 pb-4 pt-1 space-y-4 border-t border-white/8">
+            <p className="text-[13px] text-white/50 leading-relaxed max-w-3xl">
+              {SINGULARITY_ECONOMICS_DEFINITION}
+            </p>
+            <div className="space-y-3">
+              {SINGULARITY_ECONOMICS_FORMULAS.map((f) => (
+                <article
+                  key={f.id}
+                  id={`formula-${f.id}`}
+                  className="rounded-md border border-white/8 bg-black/25 px-3 py-3 space-y-2"
+                >
+                  <h4 className="text-[13px] font-medium text-white/70">
+                    {f.title}
+                  </h4>
+                  <p className="text-[12px] text-white/40 leading-relaxed">
+                    {f.blurb}
+                  </p>
+                  <div className="rounded border border-neon-cyan/15 bg-black/40 px-3 py-3 overflow-x-auto text-center">
+                    <FormulaDisplay id={f.id} fallback={f.formula} />
+                  </div>
+                  <dl className="space-y-1.5">
+                    {f.symbols.map((s) => (
+                      <div
+                        key={s.symbol}
+                        className="grid grid-cols-[minmax(4rem,auto)_1fr] gap-x-2 text-[11px] sm:text-[12px]"
+                      >
+                        <dt className="font-serif text-neon-cyan/85 shrink-0">
+                          {s.symbol}
+                        </dt>
+                        <dd className="text-white/40 leading-snug">
+                          {s.meaning}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </article>
+              ))}
+            </div>
+            <p className="text-[10px] text-white/30 leading-relaxed">
+              {SINGULARITY_ECONOMICS_FOOTNOTE}
+            </p>
+          </div>
+        </details>
       </section>
 
       {/* Use cases */}

@@ -15,8 +15,11 @@ import {
 import { GroqChatError, resolveGroqMaxTokens } from "@/lib/brokChatGroq";
 import {
   buildKnowledgeContext,
+  getBrokDifferentiationCanonBlock,
   getFounderValuesCanonBlock,
+  getGeniusBookCanonBlock,
 } from "@/lib/brokKnowledge";
+import { isBrokDifferentiationTopic } from "@/lib/kironCanonBrokDifferentiation";
 import {
   formatPageContextForPrompt,
   needsPageContext,
@@ -27,7 +30,9 @@ import {
   upsertUserFacts,
 } from "@/lib/brokUserFacts";
 import {
+  isApotheosisEthicsTopic,
   isFounderIdentityTopic,
+  isGeniusBookTopic,
   isLiveProgressTopic,
   isRonaldIngramBioTopic,
   wantsFounderDetailedAnswer,
@@ -35,10 +40,14 @@ import {
 } from "@/lib/brokTopicRouting";
 import { fetchGrokipediaRonaldIngram } from "@/lib/grokipedia";
 import { buildMarketPricesKnowledgeBlock } from "@/lib/marketPrices";
+import { buildPockPriceKnowledgeBlock } from "@/lib/pockPrice";
+import { buildAstrologyKnowledgeBlock } from "@/lib/westernAstrology";
+import { loadUserFacts } from "@/lib/brokUserFacts";
 import {
   buildRonaldIngramXKnowledgeBlock,
   shouldInjectFounderXFeed,
 } from "@/lib/ronaldIngramX";
+import { sanitizeUserFacingError, sanitizeUserFacingText } from "@/lib/brokProductLabels";
 import { wantsDetailedAnswer } from "@/lib/spokenText";
 import {
   buildBrokTimeContextBlock,
@@ -46,6 +55,7 @@ import {
 } from "@/lib/brokTimeContext";
 import { markGiftEngaged } from "@/lib/giftOutreach";
 import { getServiceSupabase } from "@/lib/supabase/server";
+import { resolvePremiumChatAccess } from "@/lib/userPaidAccess";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -198,7 +208,30 @@ export async function POST(req: Request) {
     // Always give BROK a real clock (safe, read-only).
     parts.push(buildBrokTimeContextBlock());
 
-    // Live prices (CoinGecko crypto + Yahoo stocks) when user asks price/ticker/name
+    // Live $POCK/USD (DEX) for convert / how much is X $POCK questions
+    const pockPx = await buildPockPriceKnowledgeBlock(message).catch(
+      () => null
+    );
+    if (pockPx) parts.push(pockPx);
+
+    // Western astrology chart / horoscope when asked (or DOB on file)
+    try {
+      const uf = meteredUserId
+        ? await loadUserFacts(meteredUserId)
+        : {};
+      const astro = buildAstrologyKnowledgeBlock({
+        message,
+        date_of_birth: uf.date_of_birth,
+        birth_time: uf.birth_time,
+        birth_place: uf.birth_place,
+        sun_sign: uf.sun_sign,
+      });
+      if (astro) parts.push(astro);
+    } catch {
+      /* ignore */
+    }
+
+    // Live prices (crypto + stocks) when user asks price/ticker/name
     const prices = await buildMarketPricesKnowledgeBlock(message).catch(
       () => null
     );
@@ -210,6 +243,19 @@ export async function POST(req: Request) {
         "KIRON CANON — FOUNDER ETHICS / VALUES / HISTORY (primary truth — prefer this voice and structure):\n" +
           getFounderValuesCanonBlock()
       );
+      // Genius second book + apotheosis quote (always when identity path)
+      if (isGeniusBookTopic(message) || isApotheosisEthicsTopic(message)) {
+        parts.push(
+          "KIRON CANON — GENIUS BOOK / APOTHEOSIS (primary for second book & pride/godlike-genius ethics — cite Substack URL):\n" +
+            getGeniusBookCanonBlock()
+        );
+      }
+      if (isBrokDifferentiationTopic(message)) {
+        parts.push(
+          "KIRON CANON — BROK DIFFERENTIATION A–H (pick ONE register; do not merge):\n" +
+            getBrokDifferentiationCanonBlock()
+        );
+      }
       if (knowledgeBlock?.trim()) {
         parts.push(
           "KIRON CANON / FAQ / MEMORY (supporting product mechanics):\n" +
@@ -231,6 +277,12 @@ export async function POST(req: Request) {
         }
       }
     } else {
+      if (isBrokDifferentiationTopic(message)) {
+        parts.push(
+          "KIRON CANON — BROK DIFFERENTIATION A–H (pick ONE register; do not merge):\n" +
+            getBrokDifferentiationCanonBlock()
+        );
+      }
       // Live/progress: founder X feed first; lighten pure Canon dump dominance
       if (liveProgress || shouldInjectFounderXFeed(message)) {
         const xFeed = await buildRonaldIngramXKnowledgeBlock(message).catch(
@@ -255,11 +307,28 @@ export async function POST(req: Request) {
     }
     const knowledgeWithSources = parts.length ? parts.join("\n\n") : knowledgeBlock;
 
+    // Premium xAI (grok-4.5): paid users always; everyone gets first 15 turns (intro).
+    const premiumAccess = await resolvePremiumChatAccess(meteredUserId).catch(
+      () =>
+        ({
+          usePremium: false,
+          reason: "none" as const,
+          chatTurns: 0,
+          introLimit: 15,
+        })
+    );
+    if (premiumAccess.usePremium) {
+      console.info(
+        `[brok_chat] premium_xai reason=${premiumAccess.reason} turns=${premiumAccess.chatTurns}/${premiumAccess.introLimit}`
+      );
+    }
+
     const result = await chatWithFailover(
       body.message,
       body.session_id ?? threadId,
       fileBlock || undefined,
       {
+        paidAccess: premiumAccess.usePremium,
         maxTokens: resolveGroqMaxTokens(message, {
           fileContextBlock: fileBlock,
           filenames,
@@ -277,14 +346,17 @@ export async function POST(req: Request) {
       void upsertUserFacts(meteredUserId, factsPatch);
     }
 
-    // Always record model so logs show groq 70B vs xAI grok-3 (preferred markets path).
+    // User-facing answer: never leak vendor/model names. Logs keep real providerTag.
+    const userText = sanitizeUserFacingText(cleanText);
+
+    // Always record model so logs show groq gpt-oss-120b vs xAI grok-3 (preferred markets path).
     const providerTag =
       result.provider === "xai" || result.model?.includes("grok")
         ? `xai:${result.model}`
         : `${result.provider}:${result.model}`;
 
     if (threadId) {
-      void appendThreadMessage(threadId, "assistant", cleanText, {
+      void appendThreadMessage(threadId, "assistant", userText, {
         provider: providerTag,
       });
     }
@@ -293,19 +365,22 @@ export async function POST(req: Request) {
       userId: meteredUserId,
       sessionId: result.session_id,
       question: message,
-      answer: cleanText,
+      answer: userText,
       provider: providerTag,
       pagePathname,
     });
 
     return NextResponse.json({
-      response: cleanText,
+      response: userText,
       session_id: result.session_id,
       thread_id: threadId,
+      // Client maps these to product labels (BROK Intelligence / BROK Genius).
       model: result.model,
       provider: result.provider,
       used_backup: result.used_backup,
-      capacity_note: result.capacity_note,
+      capacity_note: result.capacity_note
+        ? sanitizeUserFacingText(result.capacity_note)
+        : undefined,
       // Back-compat for clients that still read groq_model
       groq_model: result.model,
       meter_cost: meterCost,
@@ -316,7 +391,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: e.code,
-          hint: e.message,
+          hint: sanitizeUserFacingError(e.message),
           retry_after_sec: e.retryAfterSec,
         },
         { status: 503 }
@@ -326,13 +401,16 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: e.code,
-          hint: e.message,
+          hint: sanitizeUserFacingError(e.message),
           retry_after_sec: e.retryAfterSec,
         },
         { status: e.code === "other" ? 502 : 429 }
       );
     }
     const msg = e instanceof Error ? e.message : "chat_failed";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json(
+      { error: sanitizeUserFacingError(msg) },
+      { status: 502 }
+    );
   }
 }

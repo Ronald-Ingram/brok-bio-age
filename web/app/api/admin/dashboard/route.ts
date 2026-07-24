@@ -14,9 +14,99 @@ import {
 import { getServiceSupabase } from "@/lib/supabase/server";
 import { SUBSCRIPTION_TIERS } from "@/lib/subscriptionConfig";
 import { assertAdmin } from "@/lib/adminAuth";
+import { getPockSplBalance } from "@/lib/solanaPockVerify";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+
+const DEFAULT_RPC = "https://api.mainnet-beta.solana.com";
+const USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+async function fetchCorpOnChainTreasury(wallet: string): Promise<{
+  pock: number | null;
+  sol: number | null;
+  usdc: number | null;
+  error: string | null;
+  asOf: string;
+}> {
+  const asOf = new Date().toISOString();
+  const rpc = process.env.SOLANA_RPC_URL?.trim() || DEFAULT_RPC;
+
+  try {
+    const [pockProof, solRes, usdcRes] = await Promise.all([
+      getPockSplBalance(wallet),
+      fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getBalance",
+          params: [wallet],
+        }),
+        cache: "no-store",
+      }).then((r) => r.json()) as Promise<{
+        result?: { value?: number };
+        error?: { message?: string };
+      }>,
+      fetch(rpc, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "getTokenAccountsByOwner",
+          params: [
+            wallet,
+            { mint: USDC_MINT },
+            { encoding: "jsonParsed" },
+          ],
+        }),
+        cache: "no-store",
+      }).then((r) => r.json()) as Promise<{
+        result?: {
+          value?: Array<{
+            account?: {
+              data?: {
+                parsed?: {
+                  info?: {
+                    tokenAmount?: { uiAmount?: number };
+                  };
+                };
+              };
+            };
+          }>;
+        };
+        error?: { message?: string };
+      }>,
+    ]);
+
+    let usdc = 0;
+    for (const item of usdcRes.result?.value ?? []) {
+      usdc += Number(
+        item.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0
+      );
+    }
+
+    const solLamports = solRes.result?.value;
+    return {
+      pock: pockProof.balanceUiExact,
+      sol:
+        typeof solLamports === "number" ? solLamports / 1e9 : null,
+      usdc: usdcRes.error ? null : usdc,
+      error: solRes.error?.message ?? usdcRes.error?.message ?? null,
+      asOf,
+    };
+  } catch (e) {
+    return {
+      pock: null,
+      sol: null,
+      usdc: null,
+      error: e instanceof Error ? e.message : "on_chain_fetch_failed",
+      asOf,
+    };
+  }
+}
 
 export async function GET(req: Request) {
   if (!assertAdmin(req)) {
@@ -45,6 +135,7 @@ export async function GET(req: Request) {
     deviceBindingsRes,
     recentWalletsRes,
     recentBindingsRes,
+    corpOnChain,
   ] = await Promise.all([
     supabase.from("brok_users").select("id", { count: "exact", head: true }),
     supabase
@@ -125,6 +216,7 @@ export async function GET(req: Request) {
       .select("device_id, user_id, bound_at, bound_via")
       .order("bound_at", { ascending: false })
       .limit(200),
+    fetchCorpOnChainTreasury(NEOBANX_CORP_WALLET),
   ]);
 
   const ledger = ledgerRes.data ?? [];
@@ -282,8 +374,52 @@ export async function GET(req: Request) {
     );
   }
 
+  // Emergency farm kill status (app defaults + DB if available)
+  let emergency: Record<string, unknown> = {
+    note: "See docs/INCIDENT_TRIAL_FARM_KILL_2026-07-22.md",
+  };
+  try {
+    const { killStatusPublic } = await import("@/lib/emergencyKill");
+    emergency = { ...emergency, app: killStatusPublic() };
+  } catch {
+    /* ignore */
+  }
+  try {
+    const { data: switches } = await supabase
+      .from("brok_kill_switches")
+      .select("key, enabled, reason, updated_at");
+    emergency = { ...emergency, dbSwitches: switches ?? [] };
+    const { count: frozenCount } = await supabase
+      .from("brok_users")
+      .select("id", { count: "exact", head: true })
+      .not("account_frozen_at", "is", null);
+    emergency = { ...emergency, frozenAccounts: frozenCount ?? 0 };
+  } catch (e) {
+    emergency = {
+      ...emergency,
+      dbError: e instanceof Error ? e.message : "kill_status_unavailable",
+    };
+  }
+
+  if (
+    (emergency.app as { emergencyKill?: boolean } | undefined)?.emergencyKill ||
+    (Array.isArray(emergency.dbSwitches) &&
+      emergency.dbSwitches.some(
+        (s: { key?: string; enabled?: boolean }) =>
+          s.enabled &&
+          ["trial_mint", "p2p_transfers", "new_device_auth"].includes(
+            String(s.key)
+          )
+      ))
+  ) {
+    outages.push(
+      "EMERGENCY KILL ACTIVE (2026-07-22 farm): trial mint / p2p transfers / new device auth restricted — see INCIDENT_TRIAL_FARM_KILL_2026-07-22"
+    );
+  }
+
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
+    emergency,
     users: {
       total: usersRes.count ?? 0,
       subscribed: subsRes.count ?? 0,
@@ -292,7 +428,7 @@ export async function GET(req: Request) {
     },
     walletCreation: {
       note:
-        "Each new browser identity can mint one trial (+100 $POCK). Clearing site data creates a new device id → new wallet. Not permanent free credit policy — monitor only.",
+        "EMERGENCY: free trial mint may be disabled. New browser identities were being farmed for +100 $POCK → siphon. Not permanent free credit policy.",
       walletsTotal: usersRes.count ?? 0,
       walletsCreated24h,
       walletsCreated7d: users7dRes.count ?? 0,
@@ -326,6 +462,12 @@ export async function GET(req: Request) {
       corpFloat: corpRes.data?.float_remaining ?? null,
       corpAllocated: corpRes.data?.float_allocated ?? null,
       corpWallet: corpRes.data?.wallet_address ?? NEOBANX_CORP_WALLET,
+      /** Live Solana holdings in NEOBANX_CORP_WALLET (not reserved ledger / float). */
+      corpOnChainPock: corpOnChain.pock,
+      corpOnChainSol: corpOnChain.sol,
+      corpOnChainUsdc: corpOnChain.usdc,
+      corpOnChainAsOf: corpOnChain.asOf,
+      corpOnChainError: corpOnChain.error,
       stripeTopUps: stripeCredits.length,
       meterUsageEvents: meterDebits.length,
       calcEvents: calcDebits.length,
@@ -344,6 +486,12 @@ export async function GET(req: Request) {
       userLedgerPockTotal: totalLedgerPock,
       userReservedPockTotal: totalReservedPock,
       onChainQueuedPock: totalOnChainQueued,
+      /** Same as pock.corpOnChainPock — surfaced under treasury for the admin panel. */
+      corpOnChainPock: corpOnChain.pock,
+      corpOnChainSol: corpOnChain.sol,
+      corpOnChainUsdc: corpOnChain.usdc,
+      corpOnChainAsOf: corpOnChain.asOf,
+      corpOnChainError: corpOnChain.error,
       recentStripePayments: [...cardPayments]
         .sort(
           (a, b) =>

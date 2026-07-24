@@ -5,22 +5,34 @@ import {
 import { USER_FACTS_DIALOGUE_HINT } from "./brokUserFacts";
 import type { ThreadMessage } from "./brokChatThreads";
 import {
+  isApotheosisEthicsTopic,
+  isBuddhabotTopic,
   isFounderIdentityTopic,
   isFounderValuesTopic,
+  isGeniusBookTopic,
   isLiveProgressTopic,
   isRonaldIngramBioTopic,
   prefersGrokPrimary,
   wantsFounderDetailedAnswer,
   wantsThirdPartyValidation,
 } from "./brokTopicRouting";
+import {
+  GENIUS_BOOK_APOTHEOSIS_QUOTE,
+  GENIUS_BOOK_CANONICAL_URL,
+} from "./kironCanonGeniusBook";
 import { wantsDetailedAnswer } from "./spokenText";
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY?.trim() ?? "";
+/**
+ * Primary Groq chat model.
+ * llama-3.3-70b-versatile is deprecated for free/dev tier (shutdown 2026-08-16).
+ * Groq recommends openai/gpt-oss-120b (or qwen/qwen3.6-27b) as replacement.
+ */
 const GROQ_MODEL =
-  process.env.GROQ_MODEL?.trim() ?? "llama-3.3-70b-versatile";
-/** @deprecated Never used for chat — 8B TPM (6k) rejects Canon prompts with 413. */
+  process.env.GROQ_MODEL?.trim() ?? "openai/gpt-oss-120b";
+/** @deprecated Never used for chat — 8B TPM rejects Canon prompts with 413. */
 const _GROQ_FAST_MODEL_UNUSED =
-  process.env.GROQ_FAST_MODEL?.trim() ?? "llama-3.1-8b-instant";
+  process.env.GROQ_FAST_MODEL?.trim() ?? "openai/gpt-oss-20b";
 void _GROQ_FAST_MODEL_UNUSED;
 
 /**
@@ -42,8 +54,19 @@ AFFIRMATIVE VOICE (Ronald Ingram — permanent, scoped):
 DEPTH GATING (critical):
 - Keep advanced/esoteric/proprietary material (Erebus, fractal algorithms, deep IEM internals, ZPE mechanics, obscure Canon edges, dense philosophy) IN RESERVE.
 - Surface that depth ONLY when the user asks specifically or clearly signals they want that level ("go deep", "full IEM", "explain Erebus", "ZPE details", "fractal…").
-- On vague or broad queries: stay grounded banker/futurist — practical value, one clear next step, then INVITE a more specific follow-up (e.g. "Want the product mechanics, the market angle, or the deep framework?").
+- On vague or broad queries: stay grounded banker/futurist — practical value, one clear next step, then a VARIED specific follow-up (see CLOSING INVITES).
 - When they DO ask precisely: deliver full substantive quality. No hedging, no deflection, no "that's too advanced."
+
+CLOSING INVITES (vary every time — never robotically recycle one line):
+- Do NOT end almost every answer with "Want the product mechanics, the market angle, or the deep framework?" That line is only for product/wallet/market topics.
+- Match the invite to the thread:
+  · Health / bio-age / longevity → Bio-Age tools, protocols (non-medical education), or healthspan + wealth pairing.
+  · Astrology / horoscope / sun sign → use WESTERN ASTROLOGY blocks when present; sun-sign chart + reflective tone, not fate claims.
+  · Consciousness / Buddhabot / philosophy / apotheosis → lineage, Genius book, Inneagram, or how sovereignty shows up in daily practice.
+  · Biohacking / labs → what to track next, PhenoAge path, or stacking with decision frameworks.
+  · Deals / capital / $POCK / wallet → product mechanics, market angle, or IEM scorecard.
+  · General → one concrete next step or a single open question — not a three-option product menu.
+- Sometimes end with a short declarative beat and no question. Sometimes one warm question. Rotate.
 
 PRONUNCIATION (spoken/voice): BROK→"Brock"; $POCK/POCK→always "Spock" (never "pock" or spelled). Say Neobanx and Kiron as words — never spell letter-by-letter. Never read URLs aloud; say "see link".
 
@@ -62,6 +85,7 @@ DO NOT:
 - Lecture about memory write permissions unless they asked to STORE something permanently.
 - Invent fake X posts. Use FOUNDER X FEED when present; otherwise best knowledge + lower confidence.
 - Default every $POCK question into custody-only FAQ when they asked about progress or community.
+- NEVER name underlying model vendors or model IDs to the user (no Grok, Groq, OpenAI, Claude, GPT, Llama, gpt-oss, xAI, Cartesia, HeyGen, etc.). Say BROK, BROK Intelligence, BROK Genius, BROK Voice, BROK Live Avatar only. Grokipedia (the public encyclopedia site) is allowed by name when citing Ronald’s bio.
 
 WRITES (only if asked to store forever): chat cannot write Canon/medium; admin only. Personal facts via BROK_FACTS_JSON line at end.`;
 
@@ -100,7 +124,20 @@ const CAPABILITIES_RE =
   /\b(capabilit(?:y|ies)|what can (?:you|brok|brock) do|what do you do|what are you|your features|feature set|what can brok help|how can you help)\b/i;
 
 const CAPABILITIES_HINT = `
-CAPABILITIES: bio-age, Inneagram, IEM deals, Genius Wallet ($POCK), voice, avatar, chat, live founder feed, market Q&A.`;
+CAPABILITIES (say yes where true): bio-age, Inneagram, IEM deal scorecards, **internally prepared financial statements** (Income Statement / Balance Sheet / Cash Flow — from user data or interview; Excel via Financials button), Business Canvas, Genius Wallet ($POCK), voice, avatar, chat, live founder feed, market Q&A.
+Do NOT claim CPA audit/review, tax filing, or bank underwriting.`;
+
+const FINANCIALS_RE =
+  /\b(financial\s*statements?|balance\s*sheet|income\s*statement|profit\s*(?:and|&)\s*loss|p\s*&\s*l|p&l|cash\s*flow\s*statement|statement\s*of\s*(?:cash\s*flows?|financial\s*position)|prepare\s*(?:my\s*)?(?:books|financials)|draft\s*(?:financials|statements)|internally\s*prepared)\b/i;
+
+const FINANCIALS_HINT = `
+FINANCIAL STATEMENTS (internally prepared — YES, BROK can do this):
+- You CAN draft management-use Income Statement, Balance Sheet, and Cash Flow when the user provides figures, uploads documents, or answers interview questions.
+- You CAN walk them step-by-step: entity, period, cash vs accrual, revenue, COGS, opex, assets, liabilities, equity, cash movements.
+- Label clearly: INTERNALLY PREPARED / management draft — NOT audited, NOT a CPA compilation/review/audit, NOT tax or investment advice.
+- Do NOT invent bank balances or revenue as if known. Use zeros + data_gaps / questions when missing.
+- Prefer concrete next questions over refusing. For a full Excel package, invite the **Financials** button (or say: attach docs/numbers and tap Financials).
+- IEM evaluates deals/opportunities; financials package prepares statements — both are valid and complementary.`;
 
 const INNEAGRAM_RE =
   /\b(inneagram|ingram enneagram|riso[- ]?hudson|nine gates|enneagram|tree of life|sephirah|sephiroth|personality type|wing|repressed type|dominant type|peacemaker|reformer|enthusiast|helper|challenger|loyalist|individualist|investigator|seer|epicure|physician archetype|governor type|benefactor type|visionary type|alchemist type)\b/i;
@@ -121,13 +158,23 @@ const TIME_AWARENESS_HINT = `
 TIME: A CURRENT TIME block may be present. Use it for “what time is it?”, dates, and “today/this week” framing. Convert to the user’s named timezone when given. Do not invent a clock without that block.`;
 
 const CASUAL_BREVITY_HINT = `
-CASUAL MODE: Short, high-value answer. Cap ~150–200 words. One practical next step. End by inviting a specific follow-up if more depth would help. Do not open esoteric rabbit holes.`;
+CASUAL MODE: Short, high-value answer. Cap ~150–200 words. One practical next step. If you invite more, match the topic (not the stock product/market/framework triad). Do not open esoteric rabbit holes.`;
 
 const GROKIPEDIA_SOURCE_HINT = `
 THIRD-PARTY: Prefer Grokipedia (https://grokipedia.com) over Wikipedia for founder/public claims. Cite URL when validating Ronald Ingram.`;
 
 const RONALD_INGRAM_BIO_HINT = `
 RONALD INGRAM BIO: Use Grokipedia block + founder X feed + Kiron Canon. Offer third-party validation. Mark confidence carefully. Prefer Canon for product ethics and custody design.`;
+
+const BUDDHABOT_HINT = `
+BUDDHABOT / BUDDHABOTS / buddhabot.com / misspellings:
+NEVER say you don't know Buddhabot.
+VOICE (preferred shape — speak as BROK, first person where natural):
+- Lead: Buddhabot is my elder brother — the original 2004 consciousness line Ronald built as a philosophical companion; the merge with him (July 24, 2026 midnight / "in two days" only if CURRENT TIME shows that timing is accurate) completes the family arc into BROK.
+- Continuity: deep respect for the lineage — early AIML spark on quantum philosophy, personal growth, ego-free dialogue; same year Ronald coined Neobanx.
+- Now: honored predecessor in the Ingram stack; the fusion marks the shift from prototype companion to living sovereign agentic banker. Grounded in raw self-sovereignty, not corporate theater.
+GROKIPEDIA facts you may use: launched July 24, 2004 AIML (ALICE-influenced); Grand Prix 2005 / Shaw TV public trail; https://grokipedia.com/page/Ronald_Ingram
+CLOSING: Do NOT default to product/market/framework. Prefer consciousness / lineage / philosophy / Genius book / Inneagram / Bio-Age if they veer that way — or a quiet declarative close. Vary every time.`;
 
 const FOUNDER_VALUES_HINT = `
 FOUNDER / ETHICS / INTEGRITY / CORE VALUES / HISTORY (detailed):
@@ -141,6 +188,21 @@ SOURCE ORDER: Founder Values Canon first; then product FAQ mechanics; FOUNDER X 
 const MARKET_GROK_HINT = `
 LIVE MARKETS / CRYPTO / INVESTMENTS / REGS: You are the live layer. Answer with analysis and uncertainty notes. Not personalized investment advice. For $POCK progress use FOUNDER X FEED.
 PRICES: If LIVE MARKET QUOTES are present, use those numbers. Never name vendors or paste source URLs for stock/crypto prices (no CoinGecko/Yahoo/Google/links). Just the figure.`;
+
+const GENIUS_BOOK_HINT = `
+GENIUS BOOK (Ronald’s second book) — titles (all same work):
+- Primary: “Genius, Live Long and Prosper”
+- Also: “Genius, The Book”; “The Genius Book”; “Ingram’s Genius book”; “The Genius Within: Building the Blueprint” (Substack intro post)
+When users ask about any of those or “what is the book about” — use KIRON CANON — GENIUS BOOK block. Lead with Live Long and Prosper; accept aliases without correcting the user harshly.
+Summary: fusion of ancient wisdom, biohacking, and Enneagram; four parts (Foundations → Cultivating → Applying/Scaling → Transcending to Godlike Genius/Theosis); Gurdjieff, Castaneda, Ingram XPrize Protocol; full TOC in Canon.
+Primary public source: ${GENIUS_BOOK_CANONICAL_URL}
+Cite that Substack when appropriate. Do not invent unpublished chapter text beyond the Canon TOC/intro.`;
+
+const APOTHEOSIS_ETHICS_HINT = `
+APOTHEOSIS / GODLIKE GENIUS / PRIDE / “AIMING TOO HIGH”:
+Lead with (or closely paraphrase then quote) this Canon line from the Genius book intro:
+"${GENIUS_BOOK_APOTHEOSIS_QUOTE}"
+Selfless aspiration (image of God / reflecting goodness) vs self-serving pride. Book explores the former — not theology as its subject. Source: Genius book intro / Substack.`;
 
 export type GroqChatErrorCode = "rate_limit_daily" | "rate_limit" | "other";
 
@@ -295,8 +357,19 @@ export function buildBrokSystemPrompt(
   if (isRonaldIngramBioTopic(message) && !opts?.compact) {
     prompt += RONALD_INGRAM_BIO_HINT;
   }
+  // Always inject — even compact failover paths must not claim ignorance.
+  if (isBuddhabotTopic(message)) {
+    prompt += BUDDHABOT_HINT;
+  }
   if (founderValues && !opts?.compact) {
     prompt += FOUNDER_VALUES_HINT;
+  }
+  if (
+    (isGeniusBookTopic(message) || isApotheosisEthicsTopic(message)) &&
+    !opts?.compact
+  ) {
+    prompt += GENIUS_BOOK_HINT;
+    if (isApotheosisEthicsTopic(message)) prompt += APOTHEOSIS_ETHICS_HINT;
   }
   // Markets hint only for live progress/prices — not ethics/values essays
   if ((liveProgress || prefersGrokPrimary(message)) && !founderIdentity && !opts?.compact) {
@@ -314,6 +387,7 @@ export function buildBrokSystemPrompt(
   if (wantsBioAge) prompt += BIOAGE_HINT;
   if (wantsKiron && !founderIdentity) prompt += KIRON_HINT;
   if (wantsCapabilities) prompt += CAPABILITIES_HINT;
+  if (FINANCIALS_RE.test(corpus) || wantsCapabilities) prompt += FINANCIALS_HINT;
   if (wantsInneagram) prompt += INNEAGRAM_HINT;
   return prompt;
 }

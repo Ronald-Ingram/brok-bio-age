@@ -27,3 +27,4 @@ api/.env
 
 # OS
 .DS_Store
+.vercel

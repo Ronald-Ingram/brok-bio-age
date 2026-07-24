@@ -16,6 +16,9 @@ export const POCK_BALANCE_ALERT_COPY =
 export const POCK_RESERVED_USD_COPY =
   "Genius Wallet balances are fully reserved in $POCK on-chain — your token count is fixed in the ledger. The USD value shown can rise or fall with the $POCK market, in sync with balances held in other Solana wallets. You hold $POCK, not a dollar deposit.";
 
+export const POCK_CONVERT_USD_COPY =
+  "Convert $POCK ↔ USD in Genius Wallet with the live quote converter (same market rate as the price ticker). Formula: USD ≈ $POCK × live_rate; $POCK ≈ USD ÷ live_rate. Ask BROK any amount (e.g. “what is 5000 $POCK in USD?”) and it uses the live rate. Not a dollar deposit; estimates move with the market. Not financial advice.";
+
 export const BROK_FAQ_ITEMS: BrokFaqItem[] = [
   {
     id: "faq_buddhabot",
@@ -49,6 +52,12 @@ export const BROK_FAQ_ITEMS: BrokFaqItem[] = [
     question: "Why does my USD value change when my $POCK balance stays the same?",
     answer: POCK_RESERVED_USD_COPY,
     tags: ["reserved", "volatility", "custody"],
+  },
+  {
+    id: "faq_pock_usd_convert",
+    question: "How do I convert $POCK to USD (or USD to $POCK)?",
+    answer: POCK_CONVERT_USD_COPY,
+    tags: ["price", "convert", "usd", "calculator"],
   },
   {
     id: "faq_reserved_vs_onchain",

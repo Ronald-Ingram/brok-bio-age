@@ -3,7 +3,7 @@
  * Shown in admin; update this file whenever layers or write rules change.
  */
 
-export const BROK_MEMORY_HIERARCHY_VERSION = "2026-07-12d";
+export const BROK_MEMORY_HIERARCHY_VERSION = "2026-07-22a";
 
 export type MemoryLayer = {
   id: string;
@@ -32,7 +32,8 @@ export const BROK_MEMORY_LAYERS: MemoryLayer[] = [
     whoWrites: "Chat via hidden BROK_FACTS_JSON (name, favorites, Inneagram, etc.)",
     whoReads: "That user only",
     ttl: "Durable",
-    useFor: "Light personalization — not global truth",
+    useFor:
+      "Light personalization: identity, life context, diet, hopes/fears, DOB/astrology, Inneagram — not global truth",
   },
   {
     id: "short_term",
@@ -83,7 +84,7 @@ export const BROK_MEMORY_LAYERS: MemoryLayer[] = [
   {
     id: "live",
     name: "Live model layer (Grok default)",
-    store: "xAI Grok (primary when configured) → Groq Llama 70B fallback",
+    store: "xAI Grok (primary when configured) → Groq GPT-OSS 120B fallback",
     whoWrites: "N/A",
     whoReads: "All users",
     ttl: "Session",
@@ -126,7 +127,7 @@ export const BROK_TOPIC_SOURCE_ORDER = [
   },
   {
     topic: "IEM / Inneagram / bio-age product",
-    order: ["Kiron Canon + frameworks", "Llama 70B primary path", "User facts sparingly"],
+    order: ["Kiron Canon + frameworks", "GPT-OSS 120B primary path", "User facts sparingly"],
   },
 ];
 

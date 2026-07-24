@@ -7,6 +7,7 @@ import { NeoWalletServicesPanel } from "@/components/NeoWalletServicesPanel";
 import { PockAssetDisclaimer } from "@/components/PockAssetDisclaimer";
 import { PockOgClaimPanel } from "@/components/PockOgClaimPanel";
 import { PockPriceTicker } from "@/components/PockPriceTicker";
+import { PockUsdConverter } from "@/components/PockUsdConverter";
 import {
   GENIUS_WALLET_SUBTITLE,
   GENIUS_WALLET_TITLE,
@@ -868,6 +869,8 @@ export function WalletPanel({
       <NeoWalletProductsPanel featured={isGenius} />
 
       <PockPriceTicker user={user} />
+
+      <PockUsdConverter defaultPock={totalSpendablePock(user)} />
 
       {isGenius && <CustodyStatusPanel />}
 

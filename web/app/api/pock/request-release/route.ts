@@ -1,4 +1,5 @@
 import { settleCustodyRelease } from "@/lib/custodyReleaseExecutor";
+import { isUserFrozen } from "@/lib/emergencyKill";
 import { getServiceSupabase, getUserSupabase } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
@@ -23,19 +24,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    const amount =
-      body.amount != null ? Math.floor(Number(body.amount)) : undefined;
-    if (amount != null && (!Number.isFinite(amount) || amount < 1)) {
+    if (isUserFrozen(authData.user.id)) {
+      return NextResponse.json({ error: "account_frozen" }, { status: 403 });
+    }
+
+    if (body.amount == null || body.amount === ("" as unknown)) {
+      return NextResponse.json(
+        {
+          error: "amount_required",
+          message:
+            "Enter how many $POCK to move on-chain. Genius Wallet always keeps at least 100 $POCK reserved.",
+        },
+        { status: 400 }
+      );
+    }
+    const amount = Math.floor(Number(body.amount));
+    if (!Number.isFinite(amount) || amount < 1) {
       return NextResponse.json({ error: "amount_invalid" }, { status: 400 });
     }
 
     const { data, error } = await supabase.rpc("request_custody_release", {
-      p_amount: amount ?? null,
+      p_amount: amount,
       p_dest_wallet: body.destWallet?.trim() || null,
     });
 
     if (error) {
       const msg = error.message ?? "release_failed";
+      if (msg.includes("account_frozen")) {
+        return NextResponse.json({ error: "account_frozen" }, { status: 403 });
+      }
+      if (msg.includes("min_reserve_required") || msg.includes("amount_required")) {
+        return NextResponse.json(
+          {
+            error: "min_reserve_required",
+            message:
+              "Genius Wallet keeps at least 100 $POCK reserved. Enter a smaller amount.",
+          },
+          { status: 400 }
+        );
+      }
       if (msg.includes("wallet_not_connected")) {
         return NextResponse.json({ error: "wallet_not_connected" }, { status: 400 });
       }

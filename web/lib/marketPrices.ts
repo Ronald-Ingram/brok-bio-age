@@ -248,10 +248,20 @@ export function extractMarketQueries(message: string): {
     }
   }
 
-  // $POCK with price/market language
+  // $POCK with price/market/conversion language
   if (
     /\b\$?pock\b/i.test(message) &&
-    /\b(price|worth|market|trade|jupiter|quote)\b/i.test(m)
+    /\b(price|worth|market|trade|jupiter|quote|convert|conversion|in\s*usd|to\s*usd|usd\s*(?:value|amount)|dollars?|how\s+much|equals?|equivalent)\b/i.test(
+      m
+    )
+  ) {
+    cryptos.add("pock");
+  }
+  // Pure conversion phrasing without other coins
+  if (
+    /\b(convert|conversion|exchange)\b/i.test(m) &&
+    /\b\$?pock\b/i.test(message) &&
+    /\b(usd|dollar|\$)\b/i.test(m)
   ) {
     cryptos.add("pock");
   }
