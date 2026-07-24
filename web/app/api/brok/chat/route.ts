@@ -20,6 +20,7 @@ import {
   getGeniusBookCanonBlock,
 } from "@/lib/brokKnowledge";
 import { isBrokDifferentiationTopic } from "@/lib/kironCanonBrokDifferentiation";
+import { buildSecretArchivesKnowledgeBlock } from "@/lib/secretArchives";
 import {
   formatPageContextForPrompt,
   needsPageContext,
@@ -236,6 +237,15 @@ export async function POST(req: Request) {
       () => null
     );
     if (prices) parts.push(prices);
+
+    // Secret Archives — quote-only literature (never Canon; Nomotheticus anonymity)
+    const secretArchives = await buildSecretArchivesKnowledgeBlock(message).catch(
+      (err) => {
+        console.warn("[brok_chat] secret archives failed (continuing):", err);
+        return null;
+      }
+    );
+    if (secretArchives) parts.push(secretArchives);
 
     if (founderIdentity) {
       // Highest-tier founder ethics/values/history Canon (static + DB)
